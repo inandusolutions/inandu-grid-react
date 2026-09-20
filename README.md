@@ -11,7 +11,7 @@ folder and kept in sync by hand across the two repos. The React-specific layer â
 component and the `useInanduGrid()` headless hook â€” currently covers sorting (single- and, via
 shift-click, multi-column), free-text search,
 per-column filtering, pagination, single-column grouping with aggregates, row selection,
-CSV/Excel(.xls)/PDF export, i18n (the 5 built-in languages, via a `lang` prop), and inline row
+CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a `lang` prop), and inline row
 editing/creation/deletion with validation (required/min/max/pattern/custom/async). Virtualization
 is not ported yet.
 

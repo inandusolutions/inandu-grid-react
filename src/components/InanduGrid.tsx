@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
-import { exportCsv, exportExcel, exportPdf } from '../utils/exporters';
+import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
 import { createTranslator, InanduGridMessageKey } from '../utils/translate';
 
 type Translator = (key: InanduGridMessageKey, params?: Record<string, string | number>) => string;
@@ -189,6 +189,9 @@ export function InanduGrid({
             </button>
             <button type="button" onClick={() => void exportPdf(exportRows, columns, locale, exportFilenameBase)}>
               {t('MsgExportPdf')}
+            </button>
+            <button type="button" onClick={() => printTable(exportRows, columns, locale, exportFilenameBase)}>
+              {t('MsgPrint')}
             </button>
           </>
         )}

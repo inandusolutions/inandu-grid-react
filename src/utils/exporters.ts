@@ -69,6 +69,29 @@ export function exportExcel(rows: InanduGridRow[], columns: InanduGridColumn[], 
  * weights by each column's live pixel width — not meaningful yet here, no column-resize feature).
  * `jspdf` is dynamically imported so a grid that never exports to PDF never pays to load it.
  */
+/**
+ * Ported from grid-angular's `printTable()` — opens a new tab with a plain, print-styled `<table>`
+ * of `rows` and triggers the browser's print dialog on it, rather than printing the live page
+ * (which would include the toolbar, pager, and any surrounding app chrome).
+ */
+export function printTable(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string, title = 'inandu-grid'): void {
+  const headerCells = columns.map(column => `<th>${escapeMarkup(headerLabel(column))}</th>`).join('');
+  const bodyRows = rows.map(row => `<tr>${columns.map(column => `<td>${escapeMarkup(cellValue(column, row, locale))}</td>`).join('')}</tr>`).join('');
+  const html =
+    '<!doctype html><html><head><meta charset="utf-8">' +
+    `<title>${escapeMarkup(title)}</title>` +
+    '<style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #333;padding:4px 8px;text-align:left}th{background:#eee}</style>' +
+    `</head><body><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) return;
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  // Lets the popup finish parsing/laying out the document before the print dialog opens on it.
+  setTimeout(() => printWindow.print(), 0);
+}
+
 export async function exportPdf(
   rows: InanduGridRow[],
   columns: InanduGridColumn[],

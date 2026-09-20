@@ -241,5 +241,23 @@ describe('InanduGrid', () => {
     expect(screen.getByText('Export CSV')).toBeInTheDocument();
     expect(screen.getByText('Export Excel')).toBeInTheDocument();
     expect(screen.getByText('Export PDF')).toBeInTheDocument();
+    expect(screen.getByText('Print')).toBeInTheDocument();
+  });
+
+  it('prints via a new window with a plain table, and triggers the print dialog on it', () => {
+    const printWindow = { document: { write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn() };
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(printWindow as unknown as Window);
+    vi.useFakeTimers();
+
+    render(<InanduGrid rows={rows} columns={columns} exportable />);
+    fireEvent.click(screen.getByText('Print'));
+    vi.runAllTimers();
+
+    expect(openSpy).toHaveBeenCalledWith('', '_blank');
+    expect(printWindow.document.write).toHaveBeenCalledWith(expect.stringContaining('Beatriz'));
+    expect(printWindow.print).toHaveBeenCalled();
+
+    vi.useRealTimers();
+    openSpy.mockRestore();
   });
 });
