@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
@@ -122,12 +122,15 @@ export function InanduGrid({
     saveNewRow,
     copyCellText,
     pasteAt,
+    stickyOffset,
+    stickyOffsetRight,
   } = useInanduGrid({
     rows,
     columns,
     locale,
     lang,
     pageSize,
+    selectable,
     deleteConfirmMessage,
     bulkDeleteConfirmMessage,
     onRowSave,
@@ -152,6 +155,17 @@ export function InanduGrid({
   function patchFilterValue(field: string, patch: Partial<InanduGridColumnFilterValue>) {
     setFilterValue(field, { ...filterValues[field], ...patch });
   }
+
+  /** `position: sticky` inline style + width for `column`'s `<th>`/`<td>`, per its `pinned`/`width` — same offsets grid-angular's `stickyOffset`/`stickyOffsetRight` compute, applied via CSS instead of a template class/binding. */
+  function columnStyle(column: InanduGridColumn): CSSProperties {
+    const style: CSSProperties = column.width !== undefined ? { width: column.width } : {};
+    if (column.pinned === 'left') return { ...style, position: 'sticky', left: stickyOffset(column.field), zIndex: 1 };
+    if (column.pinned === 'right') return { ...style, position: 'sticky', right: stickyOffsetRight(column.field), zIndex: 1 };
+    return style;
+  }
+
+  /** The select-checkbox column is always sticky-left (offset 0) when rendered — grid-angular's posture too. */
+  const selectColumnStyle: CSSProperties | undefined = selectable ? { position: 'sticky', left: 0, zIndex: 1 } : undefined;
 
   function aggregateLabel(column: InanduGridColumn, aggregates: Record<string, number>): string {
     const kind = column.aggregate;
@@ -194,6 +208,8 @@ export function InanduGrid({
     locale,
     t,
     selectable,
+    selectColumnStyle,
+    columnStyle,
     isRowSelected,
     toggleRowSelection,
     hasRowActions,
@@ -292,7 +308,7 @@ export function InanduGrid({
         <thead>
           <tr>
             {selectable && (
-              <th>
+              <th style={selectColumnStyle}>
                 <input
                   aria-label={t('MsgSelectAll')}
                   type="checkbox"
@@ -310,6 +326,7 @@ export function InanduGrid({
               return (
                 <th
                   key={column.field}
+                  style={columnStyle(column)}
                   onClick={e => toggleSort(column.field, e.shiftKey)}
                   aria-label={t('MsgSortBy', { column: column.headerText ?? column.field })}
                 >
@@ -322,9 +339,9 @@ export function InanduGrid({
             {hasRowActions && <th />}
           </tr>
           <tr className="inandu-grid-filter-row">
-            {selectable && <th />}
+            {selectable && <th style={selectColumnStyle} />}
             {visibleColumns.map(column => (
-              <th key={column.field}>
+              <th key={column.field} style={columnStyle(column)}>
                 <FilterControl column={column} value={filterValues[column.field]} onChange={patch => patchFilterValue(column.field, patch)} t={t} />
               </th>
             ))}
@@ -350,9 +367,11 @@ export function InanduGrid({
         {aggregateColumns.length > 0 && (
           <tfoot>
             <tr className="inandu-grid-totals-row">
-              {selectable && <td />}
+              {selectable && <td style={selectColumnStyle} />}
               {visibleColumns.map(column => (
-                <td key={column.field}>{column.aggregate ? aggregateLabel(column, totals) : ''}</td>
+                <td key={column.field} style={columnStyle(column)}>
+                  {column.aggregate ? aggregateLabel(column, totals) : ''}
+                </td>
               ))}
               {hasRowActions && <td />}
             </tr>
@@ -381,6 +400,8 @@ interface DataRowProps {
   locale: string;
   t: Translator;
   selectable: boolean;
+  selectColumnStyle: CSSProperties | undefined;
+  columnStyle: (column: InanduGridColumn) => CSSProperties;
   isRowSelected: (row: InanduGridRow) => boolean;
   toggleRowSelection: (row: InanduGridRow) => void;
   hasRowActions: boolean;
@@ -408,6 +429,8 @@ function DataRow({
   locale,
   t,
   selectable,
+  selectColumnStyle,
+  columnStyle,
   isRowSelected,
   toggleRowSelection,
   hasRowActions,
@@ -430,12 +453,12 @@ function DataRow({
   return (
     <tr data-row-index={clipboard ? rowIndex : undefined}>
       {selectable && (
-        <td>
+        <td style={selectColumnStyle}>
           <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
         </td>
       )}
       {columns.map(column => (
-        <td key={column.field} data-field={clipboard ? column.field : undefined} tabIndex={clipboard ? 0 : undefined}>
+        <td key={column.field} style={columnStyle(column)} data-field={clipboard ? column.field : undefined} tabIndex={clipboard ? 0 : undefined}>
           {editing && column.editable ? (
             <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
           ) : (
@@ -479,6 +502,8 @@ function NewRowDraft({
   columns,
   t,
   selectable,
+  selectColumnStyle,
+  columnStyle,
   hasRowActions,
   rowDraft,
   fieldErrors,
@@ -489,9 +514,9 @@ function NewRowDraft({
 }: DataRowProps & { onSave: () => void; onCancel: () => void }) {
   return (
     <tr className="inandu-grid-new-row">
-      {selectable && <td />}
+      {selectable && <td style={selectColumnStyle} />}
       {columns.map(column => (
-        <td key={column.field}>
+        <td key={column.field} style={columnStyle(column)}>
           {column.editable ? (
             <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
           ) : null}

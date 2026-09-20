@@ -317,4 +317,30 @@ describe('InanduGrid', () => {
     // Still just Age hidden — Name (the last one standing) refused to hide.
     expect(screen.getByRole('columnheader', { name: 'Sort by Name' })).toBeInTheDocument();
   });
+
+  it('stacks left-pinned columns, offset by each other\'s width plus the select column', () => {
+    const pinnedColumns = [
+      { field: 'name', headerText: 'Name', pinned: 'left' as const, width: 100 },
+      { field: 'age', headerText: 'Age', type: 'number' as const, pinned: 'left' as const, width: 60 },
+    ];
+    render(<InanduGrid rows={rows} columns={pinnedColumns} selectable />);
+
+    const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    const ageHeader = screen.getByRole('columnheader', { name: 'Sort by Age' });
+    expect(nameHeader.style.position).toBe('sticky');
+    expect(nameHeader.style.left).toBe('36px'); // SELECT_COLUMN_WIDTH
+    expect(ageHeader.style.left).toBe('136px'); // 36 + name's own 100px width
+  });
+
+  it('stacks right-pinned columns from the table edge inward', () => {
+    const pinnedColumns = [
+      { field: 'name', headerText: 'Name' },
+      { field: 'age', headerText: 'Age', type: 'number' as const, pinned: 'right' as const, width: 60 },
+      { field: 'note', headerText: 'Note', pinned: 'right' as const, width: 90 },
+    ];
+    render(<InanduGrid rows={[{ name: 'Beatriz', age: 41, note: 'x' }]} columns={pinnedColumns} />);
+
+    expect(screen.getByRole('columnheader', { name: 'Sort by Age' }).style.right).toBe('90px'); // note's width, which renders after it
+    expect(screen.getByRole('columnheader', { name: 'Sort by Note' }).style.right).toBe('0px');
+  });
 });

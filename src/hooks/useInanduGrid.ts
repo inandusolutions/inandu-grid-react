@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ColumnConfig,
   InanduColumnAggregate,
+  InanduColumnStickySide,
   InanduColumnType,
   InanduGridColumnFilterValue,
   InanduGridRow,
@@ -13,6 +14,7 @@ import {
   matchesColumnFilter,
   parseDraftValue,
   parsePastedCellValue,
+  SELECT_COLUMN_WIDTH,
 } from '../core';
 import { createTranslator } from '../utils/translate';
 
@@ -45,6 +47,10 @@ export interface InanduGridColumn {
   asyncValidator?: (parsed: unknown, parsedRow: Record<string, unknown>) => Promise<string | null>;
   /** Whether this column can be hidden via the column-visibility toggle. Default: true. */
   hideable?: boolean;
+  /** Pins the column to that side of the table, `position: sticky`, regardless of scroll. Unset: not pinned. */
+  pinned?: InanduColumnStickySide;
+  /** Fixed column width in px — also what `stickyOffset`/`stickyOffsetRight` stack against. Default (unset): 80, same fallback grid-angular's `effectiveWidth() || 80` uses. */
+  width?: number;
 }
 
 /** Passed to `onRowSave` — everything `saveRow()` parsed and validated for one already-existing row. */
@@ -92,6 +98,8 @@ export interface UseInanduGridOptions {
   lang?: string;
   /** 0 disables pagination — `visibleRows` is the full sorted/filtered set. Default: 0. */
   pageSize?: number;
+  /** Whether the caller renders a select-checkbox column — `stickyOffset()` needs to know, since that column (when present) is always sticky-left too. Default: false. */
+  selectable?: boolean;
   /** `window.confirm()`-gates `deleteRow()`, same as grid-angular. Unset: deletes immediately. */
   deleteConfirmMessage?: string;
   /** `window.confirm()`-gates `deleteSelectedRows()`. Unset: deletes immediately. */
@@ -120,6 +128,7 @@ export function useInanduGrid({
   locale = 'en',
   lang,
   pageSize = 0,
+  selectable = false,
   deleteConfirmMessage,
   bulkDeleteConfirmMessage,
   onRowSave,
@@ -551,8 +560,39 @@ export function useInanduGrid({
     if (updates.length > 0) onCellsPaste?.(updates);
   }
 
+  /**
+   * The `left` offset (px) a `pinned: 'left'` column's `<th>`/`<td>` needs: the select-checkbox
+   * column's width (always sticky-left, when rendered) plus every *other* left-pinned column's
+   * `width` (defaulting to 80, same fallback grid-angular's `effectiveWidth() || 80` uses) that
+   * renders before this one in `visibleColumns`. Same semantics as grid-angular's `stickyOffset`.
+   */
+  function stickyOffset(field: string): number {
+    let offset = selectable ? SELECT_COLUMN_WIDTH : 0;
+    for (const other of visibleColumns) {
+      if (other.field === field) break;
+      if (other.pinned === 'left') offset += other.width ?? 80;
+    }
+    return offset;
+  }
+
+  /** The `right` offset (px) a `pinned: 'right'` column needs — the mirror image of `stickyOffset`, stacking from the table's right edge inward. Same semantics as grid-angular's `stickyOffsetRight`. */
+  function stickyOffsetRight(field: string): number {
+    let offset = 0;
+    let seen = false;
+    for (const other of visibleColumns) {
+      if (other.field === field) {
+        seen = true;
+        continue;
+      }
+      if (seen && other.pinned === 'right') offset += other.width ?? 80;
+    }
+    return offset;
+  }
+
   return {
     visibleColumns,
+    stickyOffset,
+    stickyOffsetRight,
     hideableColumns,
     isColumnHidden,
     toggleColumnVisibility,
