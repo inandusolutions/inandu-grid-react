@@ -26,14 +26,14 @@ const salesRows = [
 describe('InanduGrid', () => {
   it('renders headers and rows', () => {
     render(<InanduGrid rows={rows} columns={columns} />);
-    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Sort by Name' })).toBeInTheDocument();
     expect(screen.getByText('Beatriz')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
   });
 
   it('sorts by a column on header click', () => {
     render(<InanduGrid rows={rows} columns={columns} />);
-    fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Sort by Name' }));
     const cells = screen.getAllByRole('cell');
     expect(cells[0]).toHaveTextContent('Ana');
   });
@@ -54,7 +54,7 @@ describe('InanduGrid', () => {
 
   it('filters a number column by its min/max range', () => {
     render(<InanduGrid rows={rows} columns={columns} />);
-    fireEvent.change(screen.getByLabelText('Filter Age min'), { target: { value: '35' } });
+    fireEvent.change(screen.getByLabelText('Filter Age Min'), { target: { value: '35' } });
     expect(screen.getByText('Beatriz')).toBeInTheDocument();
     expect(screen.queryByText('Ana')).not.toBeInTheDocument();
   });
@@ -65,9 +65,9 @@ describe('InanduGrid', () => {
     expect(screen.getByText('Beatriz')).toBeInTheDocument();
     expect(screen.queryByText('Ana')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Next ›'));
+    fireEvent.click(screen.getByText('Next page ›'));
     expect(screen.getByText('Ana')).toBeInTheDocument();
-    expect(screen.getByText('Next ›')).toBeDisabled();
+    expect(screen.getByText('Next page ›')).toBeDisabled();
   });
 
   it('groups rows by a column with per-group and grand-total aggregates', () => {
@@ -93,7 +93,7 @@ describe('InanduGrid', () => {
     const onSelectionChange = vi.fn();
     render(<InanduGrid rows={rows} columns={columns} selectable onSelectionChange={onSelectionChange} />);
 
-    const rowCheckboxes = screen.getAllByLabelText('Select row');
+    const rowCheckboxes = screen.getAllByLabelText(/Select row/);
     fireEvent.click(rowCheckboxes[0]);
 
     expect(onSelectionChange).toHaveBeenLastCalledWith([rows[0]]);
@@ -103,11 +103,22 @@ describe('InanduGrid', () => {
     const onSelectionChange = vi.fn();
     render(<InanduGrid rows={rows} columns={columns} selectable onSelectionChange={onSelectionChange} />);
 
-    fireEvent.click(screen.getByLabelText('Select all'));
+    fireEvent.click(screen.getByLabelText('Select all rows'));
     expect(onSelectionChange).toHaveBeenLastCalledWith(rows);
 
-    fireEvent.click(screen.getByLabelText('Select all'));
+    fireEvent.click(screen.getByLabelText('Select all rows'));
     expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+  });
+
+  it('shows the MsgNoData message when there are no rows to show', () => {
+    render(<InanduGrid rows={[]} columns={columns} />);
+    expect(screen.getByText('No data')).toBeInTheDocument();
+  });
+
+  it('translates built-in UI strings via the lang prop', () => {
+    render(<InanduGrid rows={[]} columns={columns} lang="es" exportable />);
+    expect(screen.getByText('Sin datos')).toBeInTheDocument();
+    expect(screen.getByText('Exportar CSV')).toBeInTheDocument();
   });
 
   it('shows an export toolbar only when exportable is set', () => {
