@@ -23,6 +23,8 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
     setSort,
     filterValues,
     setFilterValue,
+    filterQuery,
+    setFilterQuery,
     page,
     setPage,
     pageCount,
@@ -56,6 +58,15 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
 
   return (
     <div className="inandu-grid-react">
+      <div className="inandu-grid-search">
+        <input
+          aria-label="Search"
+          type="text"
+          placeholder="Search…"
+          value={filterQuery}
+          onChange={e => setFilterQuery(e.target.value)}
+        />
+      </div>
       {groupableColumns.length > 0 && (
         <div className="inandu-grid-group-by">
           <label>

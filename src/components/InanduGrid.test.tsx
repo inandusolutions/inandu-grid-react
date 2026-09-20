@@ -38,6 +38,13 @@ describe('InanduGrid', () => {
     expect(cells[0]).toHaveTextContent('Ana');
   });
 
+  it('matches the free-text search against any column', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: '41' } });
+    expect(screen.getByText('Beatriz')).toBeInTheDocument();
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+  });
+
   it('filters a string column by its text filter', () => {
     render(<InanduGrid rows={rows} columns={columns} />);
     fireEvent.change(screen.getByLabelText('Filter Name'), { target: { value: 'ana' } });

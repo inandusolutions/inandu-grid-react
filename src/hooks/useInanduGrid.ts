@@ -69,8 +69,14 @@ export interface UseInanduGridOptions {
 export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: UseInanduGridOptions) {
   const [sort, setSort] = useState<InanduGridSort | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
+  const [filterQuery, setFilterQueryState] = useState('');
   const [page, setPage] = useState(0);
   const [groupByField, setGroupByField] = useState<string | undefined>(undefined);
+
+  function setFilterQuery(query: string) {
+    setPage(0);
+    setFilterQueryState(query);
+  }
 
   const columnConfigs = useMemo(
     () => new Map(columns.map(column => [column.field, toColumnConfig(column)])),
@@ -88,9 +94,22 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
   }
 
   const sortedFilteredRows = useMemo(() => {
-    const activeFilters = Object.entries(filterValues).filter(([, value]) => hasMeaningfulFilterValue(value));
-
     let result = rows;
+
+    // Free-text search: a row matches if ANY column's formatted display value contains the query
+    // (case-insensitive) — same semantics as grid-angular's `filteredData`, applied before the
+    // per-column filters below.
+    const query = filterQuery.trim().toLowerCase();
+    if (query) {
+      result = result.filter(row =>
+        columns.some(column => {
+          const config = columnConfigs.get(column.field)!;
+          return formatCellValue(row[column.field], config.type(), config.format(), locale).toLowerCase().includes(query);
+        }),
+      );
+    }
+
+    const activeFilters = Object.entries(filterValues).filter(([, value]) => hasMeaningfulFilterValue(value));
     if (activeFilters.length > 0) {
       result = result.filter(row =>
         activeFilters.every(([field, value]) => {
@@ -106,7 +125,7 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
     }
 
     return result;
-  }, [rows, columnConfigs, filterValues, sort, locale]);
+  }, [rows, columns, columnConfigs, filterQuery, filterValues, sort, locale]);
 
   /**
    * `sortedFilteredRows` bucketed by the grouped column's *formatted* value, in first-seen order
@@ -158,6 +177,8 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
     setSort,
     filterValues,
     setFilterValue,
+    filterQuery,
+    setFilterQuery,
     page: clampedPage,
     setPage,
     pageCount: paginationActive ? pageCount : 1,
