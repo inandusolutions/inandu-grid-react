@@ -1,22 +1,39 @@
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
-import { formatCellValue } from '../core';
+import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridColumn, useInanduGrid } from '../hooks/useInanduGrid';
 
 export interface InanduGridProps {
   rows: InanduGridRow[];
   columns: InanduGridColumn[];
   locale?: string;
-  /** 0 (default) disables pagination — every filtered/sorted row renders. */
+  /** 0 (default) disables pagination — every filtered/sorted row renders. Ignored while grouped. */
   pageSize?: number;
 }
 
 /**
- * Batteries-included table over `useInanduGrid`: sorting, a per-column filter row, and pagination.
- * Grouping, virtualization and inline editing (all present in grid-angular) land in later passes.
+ * Batteries-included table over `useInanduGrid`: sorting, a per-column filter row, pagination, and
+ * single-column grouping with per-group + grand-total aggregates. Virtualization and inline
+ * editing (both present in grid-angular) land in later passes.
  */
 export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: InanduGridProps) {
-  const { visibleRows, filteredRowCount, sort, setSort, filterValues, setFilterValue, page, setPage, pageCount } =
-    useInanduGrid({ rows, columns, locale, pageSize });
+  const {
+    visibleRows,
+    filteredRowCount,
+    sort,
+    setSort,
+    filterValues,
+    setFilterValue,
+    page,
+    setPage,
+    pageCount,
+    groupByField,
+    setGroupByField,
+    groups,
+    totals,
+  } = useInanduGrid({ rows, columns, locale, pageSize });
+
+  const aggregateColumns = columns.filter(column => column.aggregate);
+  const groupableColumns = columns.filter(column => column.groupable !== false);
 
   function toggleSort(field: string) {
     setSort(current => {
@@ -29,8 +46,35 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
     setFilterValue(field, { ...filterValues[field], ...patch });
   }
 
+  function aggregateLabel(column: InanduGridColumn, aggregates: Record<string, number>): string {
+    const kind = column.aggregate;
+    const value = aggregates[column.field];
+    if (!kind || value === undefined) return '';
+    const formatted = kind === 'count' ? String(value) : formatCellValue(value, 'number', column.format ?? '', locale);
+    return `${column.headerText ?? column.field} ${AGGREGATE_SYMBOLS[kind]}: ${formatted}`;
+  }
+
   return (
     <div className="inandu-grid-react">
+      {groupableColumns.length > 0 && (
+        <div className="inandu-grid-group-by">
+          <label>
+            Group by{' '}
+            <select
+              aria-label="Group by"
+              value={groupByField ?? ''}
+              onChange={e => setGroupByField(e.target.value || undefined)}
+            >
+              <option value="">(no grouping)</option>
+              {groupableColumns.map(column => (
+                <option key={column.field} value={column.field}>
+                  {column.headerText ?? column.field}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <table className="inandu-grid">
         <thead>
           <tr>
@@ -54,18 +98,38 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row, index) => (
-            <tr key={row['id'] != null ? String(row['id']) : index}>
+          {groups
+            ? groups.map(group => (
+                <RowGroup
+                  key={group.key}
+                  group={group}
+                  columns={columns}
+                  aggregateColumns={aggregateColumns}
+                  locale={locale}
+                  aggregateLabel={aggregateLabel}
+                />
+              ))
+            : visibleRows.map((row, index) => (
+                <tr key={row['id'] != null ? String(row['id']) : index}>
+                  {columns.map(column => (
+                    <td key={column.field}>
+                      {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+        </tbody>
+        {aggregateColumns.length > 0 && (
+          <tfoot>
+            <tr className="inandu-grid-totals-row">
               {columns.map(column => (
-                <td key={column.field}>
-                  {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
-                </td>
+                <td key={column.field}>{column.aggregate ? aggregateLabel(column, totals) : ''}</td>
               ))}
             </tr>
-          ))}
-        </tbody>
+          </tfoot>
+        )}
       </table>
-      {pageSize > 0 && (
+      {pageSize > 0 && !groupByField && (
         <div className="inandu-grid-pagination">
           <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
             ‹ Prev
@@ -79,6 +143,43 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
         </div>
       )}
     </div>
+  );
+}
+
+interface RowGroupProps {
+  group: { key: string; rows: InanduGridRow[]; aggregates: Record<string, number> };
+  columns: InanduGridColumn[];
+  aggregateColumns: InanduGridColumn[];
+  locale: string;
+  aggregateLabel: (column: InanduGridColumn, aggregates: Record<string, number>) => string;
+}
+
+/** One group header row (key + row count + per-aggregate-column labels) followed by its own data rows. */
+function RowGroup({ group, columns, aggregateColumns, locale, aggregateLabel }: RowGroupProps) {
+  return (
+    <>
+      <tr className="inandu-grid-group-row">
+        <td colSpan={columns.length}>
+          <strong>{group.key}</strong> ({group.rows.length})
+          {aggregateColumns.length > 0 && (
+            <span className="inandu-grid-group-aggregates">
+              {aggregateColumns.map(column => (
+                <span key={column.field}> · {aggregateLabel(column, group.aggregates)}</span>
+              ))}
+            </span>
+          )}
+        </td>
+      </tr>
+      {group.rows.map((row, index) => (
+        <tr key={row['id'] != null ? String(row['id']) : `${group.key}:${index}`}>
+          {columns.map(column => (
+            <td key={column.field}>
+              {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
   );
 }
 

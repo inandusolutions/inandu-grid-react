@@ -6,6 +6,8 @@ import {
   InanduGridColumnFilterValue,
   InanduGridRow,
   compareCellValues,
+  computeGroupAggregates,
+  formatCellValue,
   hasMeaningfulFilterValue,
   matchesColumnFilter,
 } from '../core';
@@ -22,6 +24,8 @@ export interface InanduGridColumn {
   format?: string;
   order?: number;
   aggregate?: InanduColumnAggregate;
+  /** Whether this column can be picked in the "group by" control. Default: true. */
+  groupable?: boolean;
 }
 
 function toColumnConfig(column: InanduGridColumn): ColumnConfig {
@@ -37,6 +41,15 @@ function toColumnConfig(column: InanduGridColumn): ColumnConfig {
 export interface InanduGridSort {
   field: string;
   direction: 'asc' | 'desc';
+}
+
+/** One bucket of `useInanduGrid`'s `groups` — mirrors grid-angular's `groupedRows`. */
+export interface InanduGridGroup {
+  /** The grouped column's *formatted* display value for every row in this bucket. */
+  key: string;
+  rows: InanduGridRow[];
+  /** One entry per column with `aggregate` set, keyed by that column's field. */
+  aggregates: Record<string, number>;
 }
 
 export interface UseInanduGridOptions {
@@ -57,10 +70,16 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
   const [sort, setSort] = useState<InanduGridSort | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
   const [page, setPage] = useState(0);
+  const [groupByField, setGroupByField] = useState<string | undefined>(undefined);
 
   const columnConfigs = useMemo(
     () => new Map(columns.map(column => [column.field, toColumnConfig(column)])),
     [columns],
+  );
+
+  const aggregateColumnConfigs = useMemo(
+    () => columns.filter(column => column.aggregate).map(column => columnConfigs.get(column.field)!),
+    [columns, columnConfigs],
   );
 
   function setFilterValue(field: string, value: InanduGridColumnFilterValue) {
@@ -89,14 +108,48 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
     return result;
   }, [rows, columnConfigs, filterValues, sort, locale]);
 
-  const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(sortedFilteredRows.length / pageSize)) : 1;
+  /**
+   * `sortedFilteredRows` bucketed by the grouped column's *formatted* value, in first-seen order
+   * (which, since it reads from `sortedFilteredRows`, follows the active sort) — same semantics as
+   * grid-angular's `groupedRows`. `null` when ungrouped.
+   */
+  const groups = useMemo<InanduGridGroup[] | null>(() => {
+    if (!groupByField) return null;
+    const column = columnConfigs.get(groupByField);
+    if (!column) return null;
+
+    const buckets = new Map<string, InanduGridRow[]>();
+    for (const row of sortedFilteredRows) {
+      const key = formatCellValue(row[groupByField], column.type(), column.format(), locale);
+      const bucket = buckets.get(key);
+      if (bucket) bucket.push(row);
+      else buckets.set(key, [row]);
+    }
+
+    return Array.from(buckets.entries()).map(([key, groupRows]) => ({
+      key,
+      rows: groupRows,
+      aggregates: computeGroupAggregates(groupRows, aggregateColumnConfigs),
+    }));
+  }, [sortedFilteredRows, groupByField, columnConfigs, aggregateColumnConfigs, locale]);
+
+  /** Grand-total aggregate for every `aggregate`-bearing column, across all of `sortedFilteredRows` — shown regardless of whether the grid is currently grouped, same as grid-angular's `totalsAggregates`. */
+  const totals = useMemo(
+    () => computeGroupAggregates(sortedFilteredRows, aggregateColumnConfigs),
+    [sortedFilteredRows, aggregateColumnConfigs],
+  );
+
+  // Grouping bypasses pagination entirely, same as grid-angular — no meaningful "page" once rows
+  // are bucketed by group.
+  const paginationActive = pageSize > 0 && !groupByField;
+  const pageCount = paginationActive ? Math.max(1, Math.ceil(sortedFilteredRows.length / pageSize)) : 1;
   const clampedPage = Math.min(page, pageCount - 1);
 
   const visibleRows = useMemo(() => {
-    if (pageSize <= 0) return sortedFilteredRows;
+    if (!paginationActive) return sortedFilteredRows;
     const start = clampedPage * pageSize;
     return sortedFilteredRows.slice(start, start + pageSize);
-  }, [sortedFilteredRows, pageSize, clampedPage]);
+  }, [sortedFilteredRows, paginationActive, pageSize, clampedPage]);
 
   return {
     visibleRows,
@@ -107,6 +160,10 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
     setFilterValue,
     page: clampedPage,
     setPage,
-    pageCount,
+    pageCount: paginationActive ? pageCount : 1,
+    groupByField,
+    setGroupByField,
+    groups,
+    totals,
   };
 }

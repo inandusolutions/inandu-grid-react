@@ -12,17 +12,28 @@ const rows = [
   { name: 'Ana', age: 30 },
 ];
 
+const salesColumns = [
+  { field: 'region', headerText: 'Region' },
+  { field: 'amount', headerText: 'Amount', type: 'number' as const, aggregate: 'sum' as const },
+];
+
+const salesRows = [
+  { region: 'North', amount: 10 },
+  { region: 'South', amount: 5 },
+  { region: 'North', amount: 20 },
+];
+
 describe('InanduGrid', () => {
   it('renders headers and rows', () => {
     render(<InanduGrid rows={rows} columns={columns} />);
-    expect(screen.getByText('Name')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
     expect(screen.getByText('Beatriz')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
   });
 
   it('sorts by a column on header click', () => {
     render(<InanduGrid rows={rows} columns={columns} />);
-    fireEvent.click(screen.getByText('Name'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
     const cells = screen.getAllByRole('cell');
     expect(cells[0]).toHaveTextContent('Ana');
   });
@@ -50,5 +61,24 @@ describe('InanduGrid', () => {
     fireEvent.click(screen.getByText('Next ›'));
     expect(screen.getByText('Ana')).toBeInTheDocument();
     expect(screen.getByText('Next ›')).toBeDisabled();
+  });
+
+  it('groups rows by a column with per-group and grand-total aggregates', () => {
+    render(<InanduGrid rows={salesRows} columns={salesColumns} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'region' } });
+
+    // "North"/"South" render both in the group header and in each row's own region cell.
+    expect(screen.getAllByText('North').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('South').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Amount Σ: 30/)).toBeInTheDocument(); // North's subtotal: 10 + 20
+    expect(screen.getByText(/Amount Σ: 35/)).toBeInTheDocument(); // grand total: 10 + 5 + 20
+  });
+
+  it('bypasses pagination while grouped', () => {
+    render(<InanduGrid rows={salesRows} columns={salesColumns} pageSize={1} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'region' } });
+    expect(screen.queryByText(/Page \d+ of \d+/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('North').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('South').length).toBeGreaterThan(0);
   });
 });
