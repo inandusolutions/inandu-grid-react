@@ -117,6 +117,8 @@ export interface UseInanduGridOptions {
   onRowsDelete?: (rows: InanduGridRow[]) => void;
   /** Emitted by `pasteAt()` with every parsed cell update — the grid never mutates `rows` itself. */
   onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
+  /** Emitted by `onRowDrop()` with the fully reordered row array — the grid never mutates `rows` itself. */
+  onRowOrderChange?: (rows: InanduGridRow[]) => void;
 }
 
 /**
@@ -139,6 +141,7 @@ export function useInanduGrid({
   onRowDelete,
   onRowsDelete,
   onCellsPaste,
+  onRowOrderChange,
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
@@ -155,6 +158,7 @@ export function useInanduGrid({
   const [reorderedFields, setReorderedFields] = useState<string[] | undefined>(undefined);
   const [draggingField, setDraggingField] = useState<string | undefined>(undefined);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [draggingRow, setDraggingRow] = useState<InanduGridRow | undefined>(undefined);
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
 
@@ -644,6 +648,27 @@ export function useInanduGrid({
     setColumnWidths(widths => ({ ...widths, [field]: Math.max(MIN_COLUMN_WIDTH, width) }));
   }
 
+  function onRowDragStart(row: InanduGridRow): void {
+    setDraggingRow(row);
+  }
+
+  /** Dropping a dragged row onto another row — inserts the dragged row immediately before the target, mirroring `onColumnDrop`'s semantics. Same as grid-angular's `onRowDrop`, operating over `sortedFilteredRows` (grid-angular's `sortedData()`). */
+  function onRowDrop(targetRow: InanduGridRow): void {
+    const draggedRow = draggingRow;
+    setDraggingRow(undefined);
+    if (!draggedRow || draggedRow === targetRow) return;
+
+    const reordered = [...sortedFilteredRows];
+    const fromIndex = reordered.indexOf(draggedRow);
+    let toIndex = reordered.indexOf(targetRow);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    reordered.splice(fromIndex, 1);
+    if (fromIndex < toIndex) toIndex--; // the removal above shifted every later index down by one
+    reordered.splice(toIndex, 0, draggedRow);
+    onRowOrderChange?.(reordered);
+  }
+
   /**
    * The `left` offset (px) a `pinned: 'left'` column's `<th>`/`<td>` needs: the select-checkbox
    * column's width (always sticky-left, when rendered) plus every *other* left-pinned column's
@@ -687,6 +712,9 @@ export function useInanduGrid({
     effectiveWidth,
     isColumnResized,
     setColumnWidth,
+    draggingRow,
+    onRowDragStart,
+    onRowDrop,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,

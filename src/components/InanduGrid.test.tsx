@@ -404,4 +404,24 @@ describe('InanduGrid', () => {
 
     expect(nameHeader.style.width).toBe('30px');
   });
+
+  it('reorders rows by dragging a row handle and dropping it onto another row', () => {
+    const onRowOrderChange = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} rowReorder onRowOrderChange={onRowOrderChange} />);
+
+    const handles = screen.getAllByLabelText('Drag to reorder row');
+    const beatrizRow = screen.getByText('Beatriz').closest('tr')!;
+    const dataTransfer = { setData: vi.fn() };
+    fireEvent.dragStart(handles[1], { dataTransfer }); // Ana's handle (row 1)
+    fireEvent.drop(beatrizRow, { dataTransfer }); // dropped before Beatriz (row 0)
+
+    expect(onRowOrderChange).toHaveBeenCalledWith([rows[1], rows[0]]); // Ana, then Beatriz
+  });
+
+  it('has no row drag handle while grouped', () => {
+    render(<InanduGrid rows={salesRows} columns={salesColumns} rowReorder />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'region' } });
+
+    expect(screen.queryAllByLabelText('Drag to reorder row')).toHaveLength(0);
+  });
 });

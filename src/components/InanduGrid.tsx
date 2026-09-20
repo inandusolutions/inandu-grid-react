@@ -54,6 +54,10 @@ export interface InanduGridProps {
   onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
   /** Adds a "Columns" toolbar button + popup letting the user show/hide individual columns at runtime. Default: false. */
   columnToggle?: boolean;
+  /** Adds a per-row drag handle to reorder rows. Default: false. Auto-disabled while grouped, same as grid-angular. */
+  rowReorder?: boolean;
+  /** Called with the fully reordered row array after a row drag-and-drop. The grid never mutates `rows` itself. */
+  onRowOrderChange?: (rows: InanduGridRow[]) => void;
 }
 
 /**
@@ -83,6 +87,8 @@ export function InanduGrid({
   clipboard = false,
   onCellsPaste,
   columnToggle = false,
+  rowReorder = false,
+  onRowOrderChange,
 }: InanduGridProps) {
   const {
     visibleColumns,
@@ -137,6 +143,9 @@ export function InanduGrid({
     pasteAt,
     stickyOffset,
     stickyOffsetRight,
+    draggingRow,
+    onRowDragStart,
+    onRowDrop,
   } = useInanduGrid({
     rows,
     columns,
@@ -151,10 +160,12 @@ export function InanduGrid({
     onRowDelete,
     onRowsDelete,
     onCellsPaste,
+    onRowOrderChange,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
   const [dragOverField, setDragOverField] = useState<string | undefined>(undefined);
+  const [dragOverRow, setDragOverRow] = useState<InanduGridRow | undefined>(undefined);
   const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
@@ -187,7 +198,8 @@ export function InanduGrid({
   const groupableColumns = visibleColumns.filter(column => column.groupable !== false);
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
   const hasRowActions = editableColumns.length > 0 || deletable || creatable;
-  const extraColumnCount = (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
+  const hasRowDragHandle = rowReorder && !groupByField;
+  const extraColumnCount = (hasRowDragHandle ? 1 : 0) + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
 
   function patchFilterValue(field: string, patch: Partial<InanduGridColumnFilterValue>) {
     setFilterValue(field, { ...filterValues[field], ...patch });
@@ -367,6 +379,7 @@ export function InanduGrid({
       <table className="inandu-grid" onKeyDown={handleTableKeyDown}>
         <thead>
           <tr>
+            {hasRowDragHandle && <th />}
             {selectable && (
               <th style={selectColumnStyle}>
                 <input
@@ -411,6 +424,7 @@ export function InanduGrid({
             {hasRowActions && <th />}
           </tr>
           <tr className="inandu-grid-filter-row">
+            {hasRowDragHandle && <th />}
             {selectable && <th style={selectColumnStyle} />}
             {visibleColumns.map(column => (
               <th key={column.field} style={columnStyle(column)}>
@@ -432,13 +446,26 @@ export function InanduGrid({
             ))
           ) : (
             visibleRows.map((row, index) => (
-              <DataRow key={row['id'] != null ? String(row['id']) : index} row={row} rowIndex={index} clipboard={clipboard} {...rowProps} />
+              <DataRow
+                key={row['id'] != null ? String(row['id']) : index}
+                row={row}
+                rowIndex={index}
+                clipboard={clipboard}
+                hasRowDragHandle={hasRowDragHandle}
+                isDragOverRow={draggingRow !== undefined && dragOverRow === row}
+                onRowDragStart={() => onRowDragStart(row)}
+                onRowDragOver={() => setDragOverRow(row)}
+                onRowDragLeave={() => setDragOverRow(current => (current === row ? undefined : current))}
+                onRowDrop={() => onRowDrop(row)}
+                {...rowProps}
+              />
             ))
           )}
         </tbody>
         {aggregateColumns.length > 0 && (
           <tfoot>
             <tr className="inandu-grid-totals-row">
+              {hasRowDragHandle && <td />}
               {selectable && <td style={selectColumnStyle} />}
               {visibleColumns.map(column => (
                 <td key={column.field} style={columnStyle(column)}>
@@ -491,6 +518,13 @@ interface DataRowProps {
   setRowDraftValue: (field: string, value: unknown) => void;
   /** Adds the `data-row-index`/`data-field`/`tabIndex` attributes `handleTableKeyDown` resolves a Ctrl+C/Ctrl+V onto — only in the flat, non-grouped render path, same restriction grid-angular's clipboard has. */
   clipboard?: boolean;
+  /** Adds a leading drag-handle `<td>` and wires the whole row for drag-and-drop reordering — only in the flat, non-grouped render path, same restriction grid-angular's `rowReorder` has. */
+  hasRowDragHandle?: boolean;
+  isDragOverRow?: boolean;
+  onRowDragStart?: () => void;
+  onRowDragOver?: () => void;
+  onRowDragLeave?: () => void;
+  onRowDrop?: () => void;
 }
 
 /** One data row — its own read-only cells, or (while it's the row being edited) `editableColumns` as controls bound to the shared draft, plus a trailing Edit/Save/Cancel/Delete actions cell when `hasRowActions`. */
@@ -519,11 +553,52 @@ function DataRow({
   isValidating,
   setRowDraftValue,
   clipboard = false,
+  hasRowDragHandle = false,
+  isDragOverRow = false,
+  onRowDragStart,
+  onRowDragOver,
+  onRowDragLeave,
+  onRowDrop,
 }: DataRowProps & { row: InanduGridRow; rowIndex: number }) {
   const editing = isEditingRow(row);
 
   return (
-    <tr data-row-index={clipboard ? rowIndex : undefined}>
+    <tr
+      data-row-index={clipboard ? rowIndex : undefined}
+      className={isDragOverRow ? 'inandu-drag-over' : undefined}
+      onDragOver={
+        hasRowDragHandle
+          ? e => {
+              e.preventDefault(); // required so the browser allows a subsequent 'drop' to fire here
+              onRowDragOver?.();
+            }
+          : undefined
+      }
+      onDragLeave={hasRowDragHandle ? onRowDragLeave : undefined}
+      onDrop={
+        hasRowDragHandle
+          ? e => {
+              e.preventDefault();
+              onRowDrop?.();
+            }
+          : undefined
+      }
+    >
+      {hasRowDragHandle && (
+        <td>
+          <span
+            className="inandu-grid-row-drag-handle"
+            aria-label={t('MsgDragRow')}
+            draggable
+            onDragStart={e => {
+              onRowDragStart?.();
+              e.dataTransfer.setData('text/plain', 'row');
+            }}
+          >
+            ⋮⋮
+          </span>
+        </td>
+      )}
       {selectable && (
         <td style={selectColumnStyle}>
           <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
