@@ -469,4 +469,42 @@ describe('InanduGrid', () => {
     expect(screen.queryByText('Banana')).not.toBeInTheDocument(); // sibling, doesn't match
     expect(screen.queryByText('Vegetables')).not.toBeInTheDocument(); // no matching descendant
   });
+
+  it('expands a row to show its detail content and collapses it back', () => {
+    render(<InanduGrid rows={rows} columns={columns} renderDetail={row => <span>Detail for {row.name as string}</span>} />);
+
+    expect(screen.queryByText('Detail for Beatriz')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Expand row details')[0]);
+    expect(screen.getByText('Detail for Beatriz')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Collapse row details'));
+    expect(screen.queryByText('Detail for Beatriz')).not.toBeInTheDocument();
+  });
+
+  it('collapses any other expanded row when singleDetailExpand is set', () => {
+    render(
+      <InanduGrid
+        rows={rows}
+        columns={columns}
+        renderDetail={row => <span>Detail for {row.name as string}</span>}
+        singleDetailExpand
+      />,
+    );
+
+    const toggles = screen.getAllByLabelText('Expand row details');
+    fireEvent.click(toggles[0]);
+    expect(screen.getByText('Detail for Beatriz')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Expand row details')[0]); // now Ana's row (the only one left collapsed)
+    expect(screen.queryByText('Detail for Beatriz')).not.toBeInTheDocument();
+    expect(screen.getByText('Detail for Ana')).toBeInTheDocument();
+  });
+
+  it('has no master-detail toggle while grouped', () => {
+    render(<InanduGrid rows={salesRows} columns={salesColumns} renderDetail={() => <span>x</span>} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'region' } });
+
+    expect(screen.queryAllByLabelText('Expand row details')).toHaveLength(0);
+  });
 });

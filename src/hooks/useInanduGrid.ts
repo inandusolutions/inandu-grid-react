@@ -132,6 +132,8 @@ export interface UseInanduGridOptions {
   treeChildrenKey?: string;
   /** Initial expand state for tree mode: `'none'` (default), `'all'`, or a max depth to open to. */
   treeDefaultExpanded?: 'none' | 'all' | number;
+  /** Whether master-detail is on — the caller checks this itself (by passing a `renderDetail`), this only controls `toggleRowExpanded`'s accordion behavior. Off (any number of rows can be expanded at once) by default. */
+  singleDetailExpand?: boolean;
 }
 
 /**
@@ -157,6 +159,7 @@ export function useInanduGrid({
   onRowOrderChange,
   treeChildrenKey,
   treeDefaultExpanded = 'none',
+  singleDetailExpand = false,
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
@@ -175,6 +178,7 @@ export function useInanduGrid({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [draggingRow, setDraggingRow] = useState<InanduGridRow | undefined>(undefined);
   const [expandedTreeRows, setExpandedTreeRows] = useState<Set<InanduGridRow>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<InanduGridRow>>(new Set());
   const treeSeededForRef = useRef<InanduGridRow[] | undefined>(undefined);
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
@@ -778,6 +782,20 @@ export function useInanduGrid({
     setDraggingRow(row);
   }
 
+  function isRowExpanded(row: InanduGridRow): boolean {
+    return expandedRows.has(row);
+  }
+
+  /** Toggles `row`'s master-detail visibility. Multiple rows can be expanded at once by default; `singleDetailExpand` collapses any other expanded row first, accordion-style. Same semantics as grid-angular's `toggleRowExpanded`. */
+  function toggleRowExpanded(row: InanduGridRow): void {
+    setExpandedRows(expanded => {
+      const next = singleDetailExpand ? new Set<InanduGridRow>() : new Set(expanded);
+      if (expanded.has(row)) next.delete(row);
+      else next.add(row);
+      return next;
+    });
+  }
+
   /** Dropping a dragged row onto another row — inserts the dragged row immediately before the target, mirroring `onColumnDrop`'s semantics. Same as grid-angular's `onRowDrop`, operating over `sortedFilteredRows` (grid-angular's `sortedData()`). */
   function onRowDrop(targetRow: InanduGridRow): void {
     const draggedRow = draggingRow;
@@ -846,6 +864,8 @@ export function useInanduGrid({
     isTreeRowExpanded,
     toggleTreeRow,
     setAllTreeRowsExpanded,
+    isRowExpanded,
+    toggleRowExpanded,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,

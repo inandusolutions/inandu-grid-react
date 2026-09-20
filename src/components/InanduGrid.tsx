@@ -6,6 +6,7 @@ import {
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
@@ -67,6 +68,14 @@ export interface InanduGridProps {
   treeChildrenKey?: string;
   /** Initial expand state for tree mode. Default: `'none'`. */
   treeDefaultExpanded?: 'none' | 'all' | number;
+  /**
+   * Enables master-detail: renders a leading expand/collapse toggle per row, and (while expanded)
+   * a full-width detail row right below it, with whatever this returns. Auto-disabled while
+   * grouped, same as grid-angular's `detailTemplate`/`hasMasterDetail`. Unset (default): off.
+   */
+  renderDetail?: (row: InanduGridRow) => ReactNode;
+  /** Collapses any other expanded row first, accordion-style, when a new one expands. Off (any number of rows can be expanded at once) by default. */
+  singleDetailExpand?: boolean;
 }
 
 /**
@@ -100,6 +109,8 @@ export function InanduGrid({
   onRowOrderChange,
   treeChildrenKey,
   treeDefaultExpanded = 'none',
+  renderDetail,
+  singleDetailExpand = false,
 }: InanduGridProps) {
   const {
     visibleColumns,
@@ -161,6 +172,8 @@ export function InanduGrid({
     treeRows,
     isTreeRowExpanded,
     toggleTreeRow,
+    isRowExpanded,
+    toggleRowExpanded,
   } = useInanduGrid({
     rows,
     columns,
@@ -178,6 +191,7 @@ export function InanduGrid({
     onRowOrderChange,
     treeChildrenKey,
     treeDefaultExpanded,
+    singleDetailExpand,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
@@ -216,7 +230,8 @@ export function InanduGrid({
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
   const hasRowActions = editableColumns.length > 0 || deletable || creatable;
   const hasRowDragHandle = rowReorder && !groupByField;
-  const extraColumnCount = (hasRowDragHandle ? 1 : 0) + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
+  const hasMasterDetail = !!renderDetail && !groupByField;
+  const extraColumnCount = (hasMasterDetail ? 1 : 0) + (hasRowDragHandle ? 1 : 0) + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
 
   function patchFilterValue(field: string, patch: Partial<InanduGridColumnFilterValue>) {
     setFilterValue(field, { ...filterValues[field], ...patch });
@@ -396,6 +411,7 @@ export function InanduGrid({
       <table className="inandu-grid" onKeyDown={handleTableKeyDown}>
         <thead>
           <tr>
+            {hasMasterDetail && <th />}
             {hasRowDragHandle && <th />}
             {selectable && (
               <th style={selectColumnStyle}>
@@ -441,6 +457,7 @@ export function InanduGrid({
             {hasRowActions && <th />}
           </tr>
           <tr className="inandu-grid-filter-row">
+            {hasMasterDetail && <th />}
             {hasRowDragHandle && <th />}
             {selectable && <th style={selectColumnStyle} />}
             {visibleColumns.map(column => (
@@ -485,6 +502,11 @@ export function InanduGrid({
                 onRowDragOver={() => setDragOverRow(row)}
                 onRowDragLeave={() => setDragOverRow(current => (current === row ? undefined : current))}
                 onRowDrop={() => onRowDrop(row)}
+                hasMasterDetail={hasMasterDetail}
+                isRowExpanded={isRowExpanded(row)}
+                toggleRowExpanded={() => toggleRowExpanded(row)}
+                renderDetail={renderDetail}
+                extraColumnCount={extraColumnCount}
                 {...rowProps}
               />
             ))
@@ -493,6 +515,7 @@ export function InanduGrid({
         {aggregateColumns.length > 0 && (
           <tfoot>
             <tr className="inandu-grid-totals-row">
+              {hasMasterDetail && <td />}
               {hasRowDragHandle && <td />}
               {selectable && <td style={selectColumnStyle} />}
               {visibleColumns.map(column => (
@@ -553,6 +576,13 @@ interface DataRowProps {
   onRowDragOver?: () => void;
   onRowDragLeave?: () => void;
   onRowDrop?: () => void;
+  /** Adds a leading expand/collapse toggle `<td>` and (while expanded) a full-width detail row right below — only in the flat, non-grouped render path, same restriction grid-angular's `hasMasterDetail` has. */
+  hasMasterDetail?: boolean;
+  isRowExpanded?: boolean;
+  toggleRowExpanded?: () => void;
+  renderDetail?: (row: InanduGridRow) => ReactNode;
+  /** Column count `hasMasterDetail`'s detail row's `colSpan` should span — `columns.length` plus every other leading/trailing extra column. */
+  extraColumnCount?: number;
 }
 
 /** One data row — its own read-only cells, or (while it's the row being edited) `editableColumns` as controls bound to the shared draft, plus a trailing Edit/Save/Cancel/Delete actions cell when `hasRowActions`. */
@@ -587,88 +617,114 @@ function DataRow({
   onRowDragOver,
   onRowDragLeave,
   onRowDrop,
+  hasMasterDetail = false,
+  isRowExpanded = false,
+  toggleRowExpanded,
+  renderDetail,
+  extraColumnCount = 0,
 }: DataRowProps & { row: InanduGridRow; rowIndex: number }) {
   const editing = isEditingRow(row);
+  const detailToggleLabel = isRowExpanded ? t('MsgCollapseDetail') : t('MsgExpandDetail');
 
   return (
-    <tr
-      data-row-index={clipboard ? rowIndex : undefined}
-      className={isDragOverRow ? 'inandu-drag-over' : undefined}
-      onDragOver={
-        hasRowDragHandle
-          ? e => {
-              e.preventDefault(); // required so the browser allows a subsequent 'drop' to fire here
-              onRowDragOver?.();
-            }
-          : undefined
-      }
-      onDragLeave={hasRowDragHandle ? onRowDragLeave : undefined}
-      onDrop={
-        hasRowDragHandle
-          ? e => {
-              e.preventDefault();
-              onRowDrop?.();
-            }
-          : undefined
-      }
-    >
-      {hasRowDragHandle && (
-        <td>
-          <span
-            className="inandu-grid-row-drag-handle"
-            aria-label={t('MsgDragRow')}
-            draggable
-            onDragStart={e => {
-              onRowDragStart?.();
-              e.dataTransfer.setData('text/plain', 'row');
-            }}
-          >
-            ⋮⋮
-          </span>
-        </td>
-      )}
-      {selectable && (
-        <td style={selectColumnStyle}>
-          <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
-        </td>
-      )}
-      {columns.map(column => (
-        <td key={column.field} style={columnStyle(column)} data-field={clipboard ? column.field : undefined} tabIndex={clipboard ? 0 : undefined}>
-          {editing && column.editable ? (
-            <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
-          ) : (
-            formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
-          )}
-        </td>
-      ))}
-      {hasRowActions && (
-        <td className="inandu-grid-row-actions">
-          {editing ? (
-            <>
-              <button type="button" disabled={isValidating} onClick={() => saveRow(row)}>
-                {t('MsgSaveRow')}
-              </button>
-              <button type="button" disabled={isValidating} onClick={cancelRowEdit}>
-                {t('MsgCancelRowEdit')}
-              </button>
-            </>
-          ) : (
-            <>
-              {editableColumns.length > 0 && (
-                <button type="button" disabled={isAnotherRowEditing(row)} onClick={() => startEditingRow(row)}>
-                  {t('MsgEditRow')}
+    <>
+      <tr
+        data-row-index={clipboard ? rowIndex : undefined}
+        className={isDragOverRow ? 'inandu-drag-over' : undefined}
+        onDragOver={
+          hasRowDragHandle
+            ? e => {
+                e.preventDefault(); // required so the browser allows a subsequent 'drop' to fire here
+                onRowDragOver?.();
+              }
+            : undefined
+        }
+        onDragLeave={hasRowDragHandle ? onRowDragLeave : undefined}
+        onDrop={
+          hasRowDragHandle
+            ? e => {
+                e.preventDefault();
+                onRowDrop?.();
+              }
+            : undefined
+        }
+      >
+        {hasMasterDetail && (
+          <td>
+            <button
+              type="button"
+              className="inandu-grid-detail-toggle"
+              aria-label={detailToggleLabel}
+              title={detailToggleLabel}
+              onClick={toggleRowExpanded}
+            >
+              {isRowExpanded ? '▾' : '▸'}
+            </button>
+          </td>
+        )}
+        {hasRowDragHandle && (
+          <td>
+            <span
+              className="inandu-grid-row-drag-handle"
+              aria-label={t('MsgDragRow')}
+              draggable
+              onDragStart={e => {
+                onRowDragStart?.();
+                e.dataTransfer.setData('text/plain', 'row');
+              }}
+            >
+              ⋮⋮
+            </span>
+          </td>
+        )}
+        {selectable && (
+          <td style={selectColumnStyle}>
+            <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
+          </td>
+        )}
+        {columns.map(column => (
+          <td key={column.field} style={columnStyle(column)} data-field={clipboard ? column.field : undefined} tabIndex={clipboard ? 0 : undefined}>
+            {editing && column.editable ? (
+              <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+            ) : (
+              formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
+            )}
+          </td>
+        ))}
+        {hasRowActions && (
+          <td className="inandu-grid-row-actions">
+            {editing ? (
+              <>
+                <button type="button" disabled={isValidating} onClick={() => saveRow(row)}>
+                  {t('MsgSaveRow')}
                 </button>
-              )}
-              {deletable && (
-                <button type="button" disabled={isAnotherRowEditing(row)} onClick={() => deleteRow(row)}>
-                  {t('MsgDeleteRow')}
+                <button type="button" disabled={isValidating} onClick={cancelRowEdit}>
+                  {t('MsgCancelRowEdit')}
                 </button>
-              )}
-            </>
-          )}
-        </td>
+              </>
+            ) : (
+              <>
+                {editableColumns.length > 0 && (
+                  <button type="button" disabled={isAnotherRowEditing(row)} onClick={() => startEditingRow(row)}>
+                    {t('MsgEditRow')}
+                  </button>
+                )}
+                {deletable && (
+                  <button type="button" disabled={isAnotherRowEditing(row)} onClick={() => deleteRow(row)}>
+                    {t('MsgDeleteRow')}
+                  </button>
+                )}
+              </>
+            )}
+          </td>
+        )}
+      </tr>
+      {hasMasterDetail && isRowExpanded && (
+        <tr className="inandu-grid-detail-row">
+          <td colSpan={columns.length + extraColumnCount}>{renderDetail?.(row)}</td>
+        </tr>
       )}
-    </tr>
+    </>
   );
 }
 
