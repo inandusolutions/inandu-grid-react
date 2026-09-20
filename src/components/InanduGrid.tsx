@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridColumn, useInanduGrid } from '../hooks/useInanduGrid';
+import { exportCsv, exportExcel, exportPdf } from '../utils/exporters';
 
 export interface InanduGridProps {
   rows: InanduGridRow[];
@@ -13,16 +14,31 @@ export interface InanduGridProps {
   selectable?: boolean;
   /** Called after every selection change with the current full selection, as an array. */
   onSelectionChange?: (selectedRows: InanduGridRow[]) => void;
+  /** Adds a CSV/Excel/PDF export toolbar above the table. Default: false. */
+  exportable?: boolean;
+  /** Base filename (without extension) for exports. Default: 'inandu-grid'. */
+  exportFilenameBase?: string;
 }
 
 /**
- * Batteries-included table over `useInanduGrid`: sorting, a per-column filter row, pagination, and
- * single-column grouping with per-group + grand-total aggregates. Virtualization and inline
- * editing (both present in grid-angular) land in later passes.
+ * Batteries-included table over `useInanduGrid`: sorting, free-text search, a per-column filter
+ * row, pagination, single-column grouping with per-group + grand-total aggregates, row selection,
+ * and CSV/Excel/PDF export. Virtualization and inline editing (both present in grid-angular) land
+ * in later passes.
  */
-export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0, selectable = false, onSelectionChange }: InanduGridProps) {
+export function InanduGrid({
+  rows,
+  columns,
+  locale = 'en',
+  pageSize = 0,
+  selectable = false,
+  onSelectionChange,
+  exportable = false,
+  exportFilenameBase = 'inandu-grid',
+}: InanduGridProps) {
   const {
     visibleRows,
+    exportRows,
     filteredRowCount,
     sort,
     setSort,
@@ -82,6 +98,19 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0, selecta
           onChange={e => setFilterQuery(e.target.value)}
         />
       </div>
+      {exportable && (
+        <div className="inandu-grid-toolbar">
+          <button type="button" onClick={() => exportCsv(exportRows, columns, locale, exportFilenameBase)}>
+            Export CSV
+          </button>
+          <button type="button" onClick={() => exportExcel(exportRows, columns, locale, exportFilenameBase)}>
+            Export Excel
+          </button>
+          <button type="button" onClick={() => void exportPdf(exportRows, columns, locale, exportFilenameBase)}>
+            Export PDF
+          </button>
+        </div>
+      )}
       {groupableColumns.length > 0 && (
         <div className="inandu-grid-group-by">
           <label>

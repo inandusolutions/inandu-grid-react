@@ -208,6 +208,8 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
 
   return {
     visibleRows,
+    /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
+    exportRows: selectionScopeRows,
     filteredRowCount: sortedFilteredRows.length,
     sort,
     setSort,

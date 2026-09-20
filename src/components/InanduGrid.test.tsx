@@ -109,4 +109,14 @@ describe('InanduGrid', () => {
     fireEvent.click(screen.getByLabelText('Select all'));
     expect(onSelectionChange).toHaveBeenLastCalledWith([]);
   });
+
+  it('shows an export toolbar only when exportable is set', () => {
+    const { rerender } = render(<InanduGrid rows={rows} columns={columns} />);
+    expect(screen.queryByText('Export CSV')).not.toBeInTheDocument();
+
+    rerender(<InanduGrid rows={rows} columns={columns} exportable />);
+    expect(screen.getByText('Export CSV')).toBeInTheDocument();
+    expect(screen.getByText('Export Excel')).toBeInTheDocument();
+    expect(screen.getByText('Export PDF')).toBeInTheDocument();
+  });
 });
