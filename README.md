@@ -8,7 +8,8 @@ CSV/Excel/PDF export, i18n and theming, with a deliberately small dependency foo
 filtering, aggregation, export, i18n) is ported from grid-angular's
 [`core/`](https://github.com/inandusolutions/inandu-grid/tree/main/projects/inandu-grid/src/lib/core)
 folder and kept in sync by hand across the two repos. The React-specific layer — the `<InanduGrid>`
-component and the `useInanduGrid()` headless hook — currently covers sorting, free-text search,
+component and the `useInanduGrid()` headless hook — currently covers sorting (single- and, via
+shift-click, multi-column), free-text search,
 per-column filtering, pagination, single-column grouping with aggregates, row selection,
 CSV/Excel(.xls)/PDF export, i18n (the 5 built-in languages, via a `lang` prop), and inline row
 editing/creation/deletion with validation (required/min/max/pattern/custom/async). Virtualization

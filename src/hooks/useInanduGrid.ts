@@ -115,7 +115,7 @@ export function useInanduGrid({
   onRowDelete,
   onRowsDelete,
 }: UseInanduGridOptions) {
-  const [sort, setSort] = useState<InanduGridSort | null>(null);
+  const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
   const [filterQuery, setFilterQueryState] = useState('');
   const [page, setPage] = useState(0);
@@ -176,13 +176,19 @@ export function useInanduGrid({
       );
     }
 
-    if (sort) {
-      const direction = sort.direction === 'asc' ? 1 : -1;
-      result = [...result].sort((a, b) => direction * compareCellValues(a[sort.field], b[sort.field], locale));
+    if (sortCriteria.length > 0) {
+      result = [...result].sort((a, b) => {
+        for (const { field, direction } of sortCriteria) {
+          const sign = direction === 'asc' ? 1 : -1;
+          const cmp = compareCellValues(a[field], b[field], locale) * sign;
+          if (cmp !== 0) return cmp;
+        }
+        return 0;
+      });
     }
 
     return result;
-  }, [rows, columns, columnConfigs, filterQuery, filterValues, sort, locale]);
+  }, [rows, columns, columnConfigs, filterQuery, filterValues, sortCriteria, locale]);
 
   /**
    * `sortedFilteredRows` bucketed by the grouped column's *formatted* value, in first-seen order
@@ -260,6 +266,41 @@ export function useInanduGrid({
 
   function clearSelection(): void {
     setSelectedRows(new Set());
+  }
+
+  /**
+   * The sort header's click handler. A plain click always collapses the sort to just `field`
+   * (toggling asc/desc if it was already the *sole* active criterion, else resetting to ascending).
+   * `additive` (a shift-click) instead builds a multi-column sort: appends `field` as a new
+   * lowest-priority criterion, or toggles its direction in place if already active. Same semantics
+   * as grid-angular's `toggleSort`.
+   */
+  function toggleSort(field: string, additive = false): void {
+    setPage(0);
+    setSortCriteria(criteria => {
+      const index = criteria.findIndex(c => c.field === field);
+      if (additive) {
+        if (index === -1) return [...criteria, { field, direction: 'asc' }];
+        const next = [...criteria];
+        next[index] = { field, direction: criteria[index].direction === 'asc' ? 'desc' : 'asc' };
+        return next;
+      }
+      if (criteria.length === 1 && criteria[0].field === field) {
+        return [{ field, direction: criteria[0].direction === 'asc' ? 'desc' : 'asc' }];
+      }
+      return [{ field, direction: 'asc' }];
+    });
+  }
+
+  function sortDirectionFor(field: string): 'asc' | 'desc' | undefined {
+    return sortCriteria.find(c => c.field === field)?.direction;
+  }
+
+  /** `field`'s 1-based priority once a *multi*-column sort is active, or `undefined` when it isn't sorted or there's only one active criterion overall. */
+  function sortPriorityFor(field: string): number | undefined {
+    if (sortCriteria.length < 2) return undefined;
+    const index = sortCriteria.findIndex(c => c.field === field);
+    return index === -1 ? undefined : index + 1;
   }
 
   function isEditingRow(row: InanduGridRow): boolean {
@@ -433,8 +474,11 @@ export function useInanduGrid({
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,
     filteredRowCount: sortedFilteredRows.length,
-    sort,
-    setSort,
+    sortCriteria,
+    setSort: setSortCriteria,
+    toggleSort,
+    sortDirectionFor,
+    sortPriorityFor,
     filterValues,
     setFilterValue,
     filterQuery,

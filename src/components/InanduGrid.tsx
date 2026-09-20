@@ -71,8 +71,9 @@ export function InanduGrid({
     visibleRows,
     exportRows,
     filteredRowCount,
-    sort,
-    setSort,
+    toggleSort,
+    sortDirectionFor,
+    sortPriorityFor,
     filterValues,
     setFilterValue,
     filterQuery,
@@ -131,13 +132,6 @@ export function InanduGrid({
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
   const hasRowActions = editableColumns.length > 0 || deletable || creatable;
   const extraColumnCount = (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
-
-  function toggleSort(field: string) {
-    setSort(current => {
-      if (!current || current.field !== field) return { field, direction: 'asc' };
-      return current.direction === 'asc' ? { field, direction: 'desc' } : null;
-    });
-  }
 
   function patchFilterValue(field: string, patch: Partial<InanduGridColumnFilterValue>) {
     setFilterValue(field, { ...filterValues[field], ...patch });
@@ -243,16 +237,21 @@ export function InanduGrid({
                 />
               </th>
             )}
-            {columns.map(column => (
-              <th
-                key={column.field}
-                onClick={() => toggleSort(column.field)}
-                aria-label={t('MsgSortBy', { column: column.headerText ?? column.field })}
-              >
-                {column.headerText ?? column.field}
-                {sort?.field === column.field ? (sort.direction === 'asc' ? ' ▲' : ' ▼') : ''}
-              </th>
-            ))}
+            {columns.map(column => {
+              const direction = sortDirectionFor(column.field);
+              const priority = sortPriorityFor(column.field);
+              return (
+                <th
+                  key={column.field}
+                  onClick={e => toggleSort(column.field, e.shiftKey)}
+                  aria-label={t('MsgSortBy', { column: column.headerText ?? column.field })}
+                >
+                  {column.headerText ?? column.field}
+                  {direction ? (direction === 'asc' ? ' ▲' : ' ▼') : ''}
+                  {priority !== undefined && <sup className="inandu-grid-sort-priority">{priority}</sup>}
+                </th>
+              );
+            })}
             {hasRowActions && <th />}
           </tr>
           <tr className="inandu-grid-filter-row">

@@ -64,6 +64,25 @@ describe('InanduGrid', () => {
     expect(screen.queryByText('Ana')).not.toBeInTheDocument();
   });
 
+  it('shift-clicking a second header builds a multi-column sort', () => {
+    const tiedRows = [
+      { name: 'Carla', age: 30 },
+      { name: 'Ana', age: 30 },
+      { name: 'Beto', age: 20 },
+    ];
+    render(<InanduGrid rows={tiedRows} columns={columns} />);
+
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Sort by Age' })); // primary: age asc
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Sort by Name' }), { shiftKey: true }); // secondary: name asc, ties broken
+
+    const cells = screen.getAllByRole('cell').map(cell => cell.textContent);
+    // Beto(20) first, then the age-30 tie broken by name: Ana, Carla.
+    expect(cells.slice(0, 6)).toEqual(['Beto', '20', 'Ana', '30', 'Carla', '30']);
+    // Both sorted columns show their multi-sort priority badge.
+    expect(screen.getByRole('columnheader', { name: 'Sort by Age' })).toHaveTextContent('1');
+    expect(screen.getByRole('columnheader', { name: 'Sort by Name' })).toHaveTextContent('2');
+  });
+
   it('paginates rows and navigates with Prev/Next', () => {
     render(<InanduGrid rows={rows} columns={columns} pageSize={1} />);
     expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument();
