@@ -1,9 +1,11 @@
 import { useEffect, useMemo } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
-import { InanduGridColumn, useInanduGrid } from '../hooks/useInanduGrid';
+import { InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf } from '../utils/exporters';
-import { createTranslator } from '../utils/translate';
+import { createTranslator, InanduGridMessageKey } from '../utils/translate';
+
+type Translator = (key: InanduGridMessageKey, params?: Record<string, string | number>) => string;
 
 export interface InanduGridProps {
   rows: InanduGridRow[];
@@ -22,13 +24,29 @@ export interface InanduGridProps {
   exportable?: boolean;
   /** Base filename (without extension) for exports. Default: 'inandu-grid'. */
   exportFilenameBase?: string;
+  /** Adds a per-row "Delete" button. Default: false. */
+  deletable?: boolean;
+  /** `window.confirm()`-gates a single row's delete. Unset: deletes immediately. */
+  deleteConfirmMessage?: string;
+  /** `window.confirm()`-gates the "Delete selected" bulk action (shown when `selectable && deletable` with at least one row selected). Unset: deletes immediately. */
+  bulkDeleteConfirmMessage?: string;
+  /** Adds an "Add row" trigger with a blank draft row. Default: false. Has no effect unless at least one column is `editable`. */
+  creatable?: boolean;
+  /** Called once a row edit passes validation. The grid never mutates `rows` itself — applying `values` onto `row` is the caller's job. */
+  onRowSave?: (event: InanduGridRowSave) => void;
+  /** Called once a new row's draft passes validation. No row reference — it doesn't exist in `rows` yet. */
+  onRowCreate?: (values: Record<string, unknown>) => void;
+  /** Called after a single-row delete is confirmed (or clicked, if no `deleteConfirmMessage`). */
+  onRowDelete?: (row: InanduGridRow) => void;
+  /** Called after the bulk "Delete selected" action is confirmed (or clicked, if no `bulkDeleteConfirmMessage`). */
+  onRowsDelete?: (rows: InanduGridRow[]) => void;
 }
 
 /**
  * Batteries-included table over `useInanduGrid`: sorting, free-text search, a per-column filter
  * row, pagination, single-column grouping with per-group + grand-total aggregates, row selection,
- * CSV/Excel/PDF export, and i18n (built-in UI strings via `INANDU_GRID_TRANSLATIONS`).
- * Virtualization and inline editing (both present in grid-angular) land in later passes.
+ * CSV/Excel/PDF export, i18n, and inline row editing/creation/deletion with validation.
+ * Virtualization (present in grid-angular) lands in a later pass.
  */
 export function InanduGrid({
   rows,
@@ -40,6 +58,14 @@ export function InanduGrid({
   onSelectionChange,
   exportable = false,
   exportFilenameBase = 'inandu-grid',
+  deletable = false,
+  deleteConfirmMessage,
+  bulkDeleteConfirmMessage,
+  creatable = false,
+  onRowSave,
+  onRowCreate,
+  onRowDelete,
+  onRowsDelete,
 }: InanduGridProps) {
   const {
     visibleRows,
@@ -64,7 +90,35 @@ export function InanduGrid({
     allSelected,
     someSelected,
     toggleSelectAll,
-  } = useInanduGrid({ rows, columns, locale, pageSize });
+    editableColumns,
+    isAddingRow,
+    rowDraft,
+    fieldErrors,
+    isValidating,
+    isEditingRow,
+    isAnotherRowEditing,
+    startEditingRow,
+    cancelRowEdit,
+    setRowDraftValue,
+    saveRow,
+    deleteRow,
+    deleteSelectedRows,
+    startAddingRow,
+    cancelAddRow,
+    saveNewRow,
+  } = useInanduGrid({
+    rows,
+    columns,
+    locale,
+    lang,
+    pageSize,
+    deleteConfirmMessage,
+    bulkDeleteConfirmMessage,
+    onRowSave,
+    onRowCreate,
+    onRowDelete,
+    onRowsDelete,
+  });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
 
@@ -74,7 +128,9 @@ export function InanduGrid({
 
   const aggregateColumns = columns.filter(column => column.aggregate);
   const groupableColumns = columns.filter(column => column.groupable !== false);
-  const isEmpty = (groups ? groups.length === 0 : visibleRows.length === 0);
+  const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
+  const hasRowActions = editableColumns.length > 0 || deletable || creatable;
+  const extraColumnCount = (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
 
   function toggleSort(field: string) {
     setSort(current => {
@@ -95,6 +151,28 @@ export function InanduGrid({
     return `${column.headerText ?? column.field} ${AGGREGATE_SYMBOLS[kind]}: ${formatted}`;
   }
 
+  const rowProps: DataRowProps = {
+    columns,
+    locale,
+    t,
+    selectable,
+    isRowSelected,
+    toggleRowSelection,
+    hasRowActions,
+    editableColumns,
+    isEditingRow,
+    isAnotherRowEditing,
+    startEditingRow,
+    cancelRowEdit,
+    saveRow,
+    deleteRow,
+    deletable,
+    rowDraft,
+    fieldErrors,
+    isValidating,
+    setRowDraftValue,
+  };
+
   return (
     <div className="inandu-grid-react">
       <div className="inandu-grid-search">
@@ -106,29 +184,39 @@ export function InanduGrid({
           onChange={e => setFilterQuery(e.target.value)}
         />
       </div>
-      {exportable && (
-        <div className="inandu-grid-toolbar">
-          <button type="button" onClick={() => exportCsv(exportRows, columns, locale, exportFilenameBase)}>
-            {t('MsgExportCsv')}
+      <div className="inandu-grid-toolbar">
+        {exportable && (
+          <>
+            <button type="button" onClick={() => exportCsv(exportRows, columns, locale, exportFilenameBase)}>
+              {t('MsgExportCsv')}
+            </button>
+            <button type="button" onClick={() => exportExcel(exportRows, columns, locale, exportFilenameBase)}>
+              {t('MsgExportExcel')}
+            </button>
+            <button type="button" onClick={() => void exportPdf(exportRows, columns, locale, exportFilenameBase)}>
+              {t('MsgExportPdf')}
+            </button>
+          </>
+        )}
+        {creatable && editableColumns.length > 0 && !isAddingRow && (
+          <button type="button" onClick={startAddingRow}>
+            {t('MsgAddRow')}
           </button>
-          <button type="button" onClick={() => exportExcel(exportRows, columns, locale, exportFilenameBase)}>
-            {t('MsgExportExcel')}
+        )}
+        {selectable && deletable && selectedRows.size > 0 && (
+          <button type="button" onClick={deleteSelectedRows}>
+            {t('MsgDeleteSelected', { count: selectedRows.size })}
           </button>
-          <button type="button" onClick={() => void exportPdf(exportRows, columns, locale, exportFilenameBase)}>
-            {t('MsgExportPdf')}
-          </button>
-        </div>
-      )}
+        )}
+      </div>
       {groupableColumns.length > 0 && (
         <div className="inandu-grid-group-by">
           <label>
-            {groupByField ? t('MsgGroupedBy', { column: groupableColumns.find(c => c.field === groupByField)?.headerText ?? groupByField }) : t('MsgGroupByHint')}{' '}
+            {groupByField
+              ? t('MsgGroupedBy', { column: groupableColumns.find(c => c.field === groupByField)?.headerText ?? groupByField })
+              : t('MsgGroupByHint')}{' '}
             {/* No dictionary key names this control itself (grid-angular's equivalent is a drag-and-drop zone, not a picker) — "Group by" is structural chrome, not a translated message. */}
-            <select
-              aria-label="Group by"
-              value={groupByField ?? ''}
-              onChange={e => setGroupByField(e.target.value || undefined)}
-            >
+            <select aria-label="Group by" value={groupByField ?? ''} onChange={e => setGroupByField(e.target.value || undefined)}>
               <option value="">{t('MsgCancelGrouping')}</option>
               {groupableColumns.map(column => (
                 <option key={column.field} value={column.field}>
@@ -165,61 +253,30 @@ export function InanduGrid({
                 {sort?.field === column.field ? (sort.direction === 'asc' ? ' ▲' : ' ▼') : ''}
               </th>
             ))}
+            {hasRowActions && <th />}
           </tr>
           <tr className="inandu-grid-filter-row">
             {selectable && <th />}
             {columns.map(column => (
               <th key={column.field}>
-                <FilterControl
-                  column={column}
-                  value={filterValues[column.field]}
-                  onChange={patch => patchFilterValue(column.field, patch)}
-                  t={t}
-                />
+                <FilterControl column={column} value={filterValues[column.field]} onChange={patch => patchFilterValue(column.field, patch)} t={t} />
               </th>
             ))}
+            {hasRowActions && <th />}
           </tr>
         </thead>
         <tbody>
+          {isAddingRow && <NewRowDraft {...rowProps} onSave={() => void saveNewRow()} onCancel={cancelAddRow} />}
           {isEmpty ? (
             <tr>
-              <td colSpan={columns.length + (selectable ? 1 : 0)}>{t('MsgNoData')}</td>
+              <td colSpan={columns.length + extraColumnCount}>{t('MsgNoData')}</td>
             </tr>
           ) : groups ? (
             groups.map(group => (
-              <RowGroup
-                key={group.key}
-                group={group}
-                columns={columns}
-                aggregateColumns={aggregateColumns}
-                locale={locale}
-                aggregateLabel={aggregateLabel}
-                selectable={selectable}
-                isRowSelected={isRowSelected}
-                toggleRowSelection={toggleRowSelection}
-                t={t}
-              />
+              <RowGroup key={group.key} group={group} aggregateColumns={aggregateColumns} aggregateLabel={aggregateLabel} extraColumnCount={extraColumnCount} {...rowProps} />
             ))
           ) : (
-            visibleRows.map((row, index) => (
-              <tr key={row['id'] != null ? String(row['id']) : index}>
-                {selectable && (
-                  <td>
-                    <input
-                      aria-label={t('MsgSelectRow', { index: index + 1 })}
-                      type="checkbox"
-                      checked={isRowSelected(row)}
-                      onChange={() => toggleRowSelection(row)}
-                    />
-                  </td>
-                )}
-                {columns.map(column => (
-                  <td key={column.field}>
-                    {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
-                  </td>
-                ))}
-              </tr>
-            ))
+            visibleRows.map((row, index) => <DataRow key={row['id'] != null ? String(row['id']) : index} row={row} rowIndex={index} {...rowProps} />)
           )}
         </tbody>
         {aggregateColumns.length > 0 && (
@@ -229,6 +286,7 @@ export function InanduGrid({
               {columns.map(column => (
                 <td key={column.field}>{column.aggregate ? aggregateLabel(column, totals) : ''}</td>
               ))}
+              {hasRowActions && <td />}
             </tr>
           </tfoot>
         )}
@@ -250,36 +308,151 @@ export function InanduGrid({
   );
 }
 
-type Translator = (key: import('../utils/translate').InanduGridMessageKey, params?: Record<string, string | number>) => string;
-
-interface RowGroupProps {
-  group: { key: string; rows: InanduGridRow[]; aggregates: Record<string, number> };
+interface DataRowProps {
   columns: InanduGridColumn[];
-  aggregateColumns: InanduGridColumn[];
   locale: string;
-  aggregateLabel: (column: InanduGridColumn, aggregates: Record<string, number>) => string;
+  t: Translator;
   selectable: boolean;
   isRowSelected: (row: InanduGridRow) => boolean;
   toggleRowSelection: (row: InanduGridRow) => void;
-  t: Translator;
+  hasRowActions: boolean;
+  editableColumns: InanduGridColumn[];
+  isEditingRow: (row: InanduGridRow) => boolean;
+  isAnotherRowEditing: (row: InanduGridRow) => boolean;
+  startEditingRow: (row: InanduGridRow) => void;
+  cancelRowEdit: () => void;
+  saveRow: (row: InanduGridRow) => void;
+  deleteRow: (row: InanduGridRow) => void;
+  deletable: boolean;
+  rowDraft: Record<string, unknown>;
+  fieldErrors: Record<string, string>;
+  isValidating: boolean;
+  setRowDraftValue: (field: string, value: unknown) => void;
 }
 
-/** One group header row (key + row count + per-aggregate-column labels) followed by its own data rows. */
-function RowGroup({
-  group,
+/** One data row — its own read-only cells, or (while it's the row being edited) `editableColumns` as controls bound to the shared draft, plus a trailing Edit/Save/Cancel/Delete actions cell when `hasRowActions`. */
+function DataRow({
+  row,
+  rowIndex,
   columns,
-  aggregateColumns,
   locale,
-  aggregateLabel,
+  t,
   selectable,
   isRowSelected,
   toggleRowSelection,
+  hasRowActions,
+  editableColumns,
+  isEditingRow,
+  isAnotherRowEditing,
+  startEditingRow,
+  cancelRowEdit,
+  saveRow,
+  deleteRow,
+  deletable,
+  rowDraft,
+  fieldErrors,
+  isValidating,
+  setRowDraftValue,
+}: DataRowProps & { row: InanduGridRow; rowIndex: number }) {
+  const editing = isEditingRow(row);
+
+  return (
+    <tr>
+      {selectable && (
+        <td>
+          <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
+        </td>
+      )}
+      {columns.map(column => (
+        <td key={column.field}>
+          {editing && column.editable ? (
+            <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+          ) : (
+            formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
+          )}
+        </td>
+      ))}
+      {hasRowActions && (
+        <td className="inandu-grid-row-actions">
+          {editing ? (
+            <>
+              <button type="button" disabled={isValidating} onClick={() => saveRow(row)}>
+                {t('MsgSaveRow')}
+              </button>
+              <button type="button" disabled={isValidating} onClick={cancelRowEdit}>
+                {t('MsgCancelRowEdit')}
+              </button>
+            </>
+          ) : (
+            <>
+              {editableColumns.length > 0 && (
+                <button type="button" disabled={isAnotherRowEditing(row)} onClick={() => startEditingRow(row)}>
+                  {t('MsgEditRow')}
+                </button>
+              )}
+              {deletable && (
+                <button type="button" disabled={isAnotherRowEditing(row)} onClick={() => deleteRow(row)}>
+                  {t('MsgDeleteRow')}
+                </button>
+              )}
+            </>
+          )}
+        </td>
+      )}
+    </tr>
+  );
+}
+
+/** The blank draft row shown above the data while `creatable`'s "Add row" trigger is active — every `editableColumns` field starts empty, nothing needs seeding (unlike editing an existing row). */
+function NewRowDraft({
+  columns,
   t,
-}: RowGroupProps) {
+  selectable,
+  hasRowActions,
+  rowDraft,
+  fieldErrors,
+  isValidating,
+  setRowDraftValue,
+  onSave,
+  onCancel,
+}: DataRowProps & { onSave: () => void; onCancel: () => void }) {
+  return (
+    <tr className="inandu-grid-new-row">
+      {selectable && <td />}
+      {columns.map(column => (
+        <td key={column.field}>
+          {column.editable ? (
+            <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+          ) : null}
+        </td>
+      ))}
+      {hasRowActions && (
+        <td className="inandu-grid-row-actions">
+          <button type="button" disabled={isValidating} onClick={onSave}>
+            {t('MsgSaveRow')}
+          </button>
+          <button type="button" disabled={isValidating} onClick={onCancel}>
+            {t('MsgCancelRowEdit')}
+          </button>
+        </td>
+      )}
+    </tr>
+  );
+}
+
+interface RowGroupProps extends DataRowProps {
+  group: { key: string; rows: InanduGridRow[]; aggregates: Record<string, number> };
+  aggregateColumns: InanduGridColumn[];
+  aggregateLabel: (column: InanduGridColumn, aggregates: Record<string, number>) => string;
+  extraColumnCount: number;
+}
+
+/** One group header row (key + row count + per-aggregate-column labels) followed by its own data rows. */
+function RowGroup({ group, columns, aggregateColumns, aggregateLabel, extraColumnCount, ...rowProps }: RowGroupProps) {
   return (
     <>
       <tr className="inandu-grid-group-row">
-        <td colSpan={columns.length + (selectable ? 1 : 0)}>
+        <td colSpan={columns.length + extraColumnCount}>
           <strong>{group.key}</strong> ({group.rows.length})
           {aggregateColumns.length > 0 && (
             <span className="inandu-grid-group-aggregates">
@@ -291,25 +464,44 @@ function RowGroup({
         </td>
       </tr>
       {group.rows.map((row, index) => (
-        <tr key={row['id'] != null ? String(row['id']) : `${group.key}:${index}`}>
-          {selectable && (
-            <td>
-              <input
-                aria-label={t('MsgSelectRow', { index: index + 1 })}
-                type="checkbox"
-                checked={isRowSelected(row)}
-                onChange={() => toggleRowSelection(row)}
-              />
-            </td>
-          )}
-          {columns.map(column => (
-            <td key={column.field}>
-              {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
-            </td>
-          ))}
-        </tr>
+        <DataRow key={row['id'] != null ? String(row['id']) : `${group.key}:${index}`} row={row} rowIndex={index} columns={columns} {...rowProps} />
       ))}
     </>
+  );
+}
+
+interface EditCellProps {
+  column: InanduGridColumn;
+  value: unknown;
+  error: string | undefined;
+  onChange: (value: unknown) => void;
+  t: Translator;
+}
+
+/** One editable cell's control, bound to the shared row draft in the same *raw control* shape `parseDraftValue()` expects (a string for text/number/date, a boolean for the checkbox) — plus its inline validation message, if any. */
+function EditCell({ column, value, error, onChange, t }: EditCellProps) {
+  const type = column.type ?? 'string';
+  const label = t('MsgEditCell', { column: column.headerText ?? column.field });
+
+  const control =
+    type === 'boolean' ? (
+      <input aria-label={label} type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} />
+    ) : type === 'date' ? (
+      <input aria-label={label} type="date" value={typeof value === 'string' ? value : ''} onChange={e => onChange(e.target.value)} />
+    ) : (
+      <input
+        aria-label={label}
+        type={type === 'number' ? 'number' : 'text'}
+        value={typeof value === 'string' ? value : ''}
+        onChange={e => onChange(e.target.value)}
+      />
+    );
+
+  return (
+    <span className="inandu-grid-edit-cell">
+      {control}
+      {error && <span className="inandu-grid-field-error">{error}</span>}
+    </span>
   );
 }
 
@@ -328,18 +520,8 @@ function FilterControl({ column, value, onChange, t }: FilterControlProps) {
   if (type === 'number') {
     return (
       <span className="inandu-grid-filter-range">
-        <input
-          aria-label={`${label} ${t('MsgFilterMin')}`}
-          type="number"
-          value={value?.min ?? ''}
-          onChange={e => onChange({ min: e.target.value })}
-        />
-        <input
-          aria-label={`${label} ${t('MsgFilterMax')}`}
-          type="number"
-          value={value?.max ?? ''}
-          onChange={e => onChange({ max: e.target.value })}
-        />
+        <input aria-label={`${label} ${t('MsgFilterMin')}`} type="number" value={value?.min ?? ''} onChange={e => onChange({ min: e.target.value })} />
+        <input aria-label={`${label} ${t('MsgFilterMax')}`} type="number" value={value?.max ?? ''} onChange={e => onChange({ max: e.target.value })} />
       </span>
     );
   }
@@ -347,18 +529,8 @@ function FilterControl({ column, value, onChange, t }: FilterControlProps) {
   if (type === 'date') {
     return (
       <span className="inandu-grid-filter-range">
-        <input
-          aria-label={`${label} ${t('MsgFilterFrom')}`}
-          type="date"
-          value={value?.from ?? ''}
-          onChange={e => onChange({ from: e.target.value })}
-        />
-        <input
-          aria-label={`${label} ${t('MsgFilterTo')}`}
-          type="date"
-          value={value?.to ?? ''}
-          onChange={e => onChange({ to: e.target.value })}
-        />
+        <input aria-label={`${label} ${t('MsgFilterFrom')}`} type="date" value={value?.from ?? ''} onChange={e => onChange({ from: e.target.value })} />
+        <input aria-label={`${label} ${t('MsgFilterTo')}`} type="date" value={value?.to ?? ''} onChange={e => onChange({ to: e.target.value })} />
       </span>
     );
   }

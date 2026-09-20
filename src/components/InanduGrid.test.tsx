@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
 
@@ -21,6 +21,11 @@ const salesRows = [
   { region: 'North', amount: 10 },
   { region: 'South', amount: 5 },
   { region: 'North', amount: 20 },
+];
+
+const editableColumns = [
+  { field: 'name', headerText: 'Name', editable: true, required: true },
+  { field: 'age', headerText: 'Age', type: 'number' as const, editable: true, min: 0, max: 120 },
 ];
 
 describe('InanduGrid', () => {
@@ -119,6 +124,94 @@ describe('InanduGrid', () => {
     render(<InanduGrid rows={[]} columns={columns} lang="es" exportable />);
     expect(screen.getByText('Sin datos')).toBeInTheDocument();
     expect(screen.getByText('Exportar CSV')).toBeInTheDocument();
+  });
+
+  // saveRow()/saveNewRow() are async (they always await validateAndParseDraft(), even with no
+  // asyncValidator involved), so their state updates land a microtask after the click — these use
+  // RTL's `findBy*` (which polls) rather than `getBy*` to observe the result.
+
+  it('edits a row and saves valid values', async () => {
+    const onRowSave = vi.fn();
+    render(<InanduGrid rows={rows} columns={editableColumns} onRowSave={onRowSave} />);
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    fireEvent.change(screen.getByLabelText('Edit Age'), { target: { value: '42' } });
+    fireEvent.click(screen.getByText('Save'));
+    await waitForElementToBeRemoved(() => screen.queryByLabelText('Edit Age'));
+
+    // Edit mode exits — "Edit"/"Delete" buttons come back for every row.
+    expect(screen.getAllByText('Edit')).toHaveLength(2);
+    expect(onRowSave).toHaveBeenCalledWith({ row: rows[0], values: { name: 'Beatriz', age: 42 } });
+  });
+
+  it('blocks the save and shows an inline error when a required field is cleared', async () => {
+    const onRowSave = vi.fn();
+    render(<InanduGrid rows={rows} columns={editableColumns} onRowSave={onRowSave} />);
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    fireEvent.change(screen.getByLabelText('Edit Name'), { target: { value: '' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(await screen.findByText('This field is required')).toBeInTheDocument();
+    expect(onRowSave).not.toHaveBeenCalled();
+  });
+
+  it('rejects a value outside min/max with the interpolated message', async () => {
+    render(<InanduGrid rows={rows} columns={editableColumns} />);
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    fireEvent.change(screen.getByLabelText('Edit Age'), { target: { value: '200' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(await screen.findByText('Must be at most 120')).toBeInTheDocument();
+  });
+
+  it('adds a new row via the Add row trigger', async () => {
+    const onRowCreate = vi.fn();
+    render(<InanduGrid rows={rows} columns={editableColumns} creatable onRowCreate={onRowCreate} />);
+
+    fireEvent.click(screen.getByText('Add row'));
+    fireEvent.change(screen.getByLabelText('Edit Name'), { target: { value: 'Carla' } });
+    fireEvent.change(screen.getByLabelText('Edit Age'), { target: { value: '25' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    // The "Add row" trigger comes back once the draft is dismissed after a successful save.
+    expect(await screen.findByText('Add row')).toBeInTheDocument();
+    expect(onRowCreate).toHaveBeenCalledWith({ name: 'Carla', age: 25 });
+  });
+
+  it('deletes a row, confirming via window.confirm when deleteConfirmMessage is set', () => {
+    const onRowDelete = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<InanduGrid rows={rows} columns={columns} deletable deleteConfirmMessage="Sure?" onRowDelete={onRowDelete} />);
+
+    fireEvent.click(screen.getAllByText('Delete')[0]);
+
+    expect(confirmSpy).toHaveBeenCalledWith('Sure?');
+    expect(onRowDelete).toHaveBeenCalledWith(rows[0]);
+    confirmSpy.mockRestore();
+  });
+
+  it('does not delete when window.confirm is cancelled', () => {
+    const onRowDelete = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<InanduGrid rows={rows} columns={columns} deletable deleteConfirmMessage="Sure?" onRowDelete={onRowDelete} />);
+
+    fireEvent.click(screen.getAllByText('Delete')[0]);
+
+    expect(onRowDelete).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it('bulk-deletes every selected row and clears the selection', () => {
+    const onRowsDelete = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} selectable deletable onRowsDelete={onRowsDelete} />);
+
+    fireEvent.click(screen.getByLabelText('Select all rows'));
+    fireEvent.click(screen.getByText(/Delete selected/));
+
+    expect(onRowsDelete).toHaveBeenCalledWith(rows);
+    expect(screen.getByLabelText('Select all rows')).not.toBeChecked();
   });
 
   it('shows an export toolbar only when exportable is set', () => {
