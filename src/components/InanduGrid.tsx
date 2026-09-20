@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
-import { InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
+import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
 import { createTranslator, InanduGridMessageKey } from '../utils/translate';
 
@@ -40,6 +40,10 @@ export interface InanduGridProps {
   onRowDelete?: (row: InanduGridRow) => void;
   /** Called after the bulk "Delete selected" action is confirmed (or clicked, if no `bulkDeleteConfirmMessage`). */
   onRowsDelete?: (rows: InanduGridRow[]) => void;
+  /** Opts into `Ctrl+C`/`Ctrl+V` cell copy/paste (Excel-style TSV). Default: false. */
+  clipboard?: boolean;
+  /** Called with every parsed cell update from a `Ctrl+V`. The grid never mutates `rows` itself. */
+  onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
 }
 
 /**
@@ -66,6 +70,8 @@ export function InanduGrid({
   onRowCreate,
   onRowDelete,
   onRowsDelete,
+  clipboard = false,
+  onCellsPaste,
 }: InanduGridProps) {
   const {
     visibleRows,
@@ -107,6 +113,8 @@ export function InanduGrid({
     startAddingRow,
     cancelAddRow,
     saveNewRow,
+    copyCellText,
+    pasteAt,
   } = useInanduGrid({
     rows,
     columns,
@@ -119,6 +127,7 @@ export function InanduGrid({
     onRowCreate,
     onRowDelete,
     onRowsDelete,
+    onCellsPaste,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
@@ -143,6 +152,34 @@ export function InanduGrid({
     if (!kind || value === undefined) return '';
     const formatted = kind === 'count' ? String(value) : formatCellValue(value, 'number', column.format ?? '', locale);
     return `${column.headerText ?? column.field} ${AGGREGATE_SYMBOLS[kind]}: ${formatted}`;
+  }
+
+  /**
+   * The `Ctrl+C`/`Ctrl+V` half of grid-angular's `handleClipboardShortcut` — resolves the focused
+   * cell via the `data-row-index`/`data-field` attributes each `<td>`/`<tr>` carries (only in the
+   * flat, non-grouped render path, same restriction), then defers to `copyCellText()`/`pasteAt()`.
+   * Ignored while focus is inside a cell's own edit control — native copy/paste of the *selected
+   * text* there should win, not a whole-cell copy/paste.
+   */
+  function handleTableKeyDown(event: ReactKeyboardEvent<HTMLTableElement>) {
+    if (!clipboard || !(event.ctrlKey || event.metaKey)) return;
+    const key = event.key.toLowerCase();
+    if (key !== 'c' && key !== 'v') return;
+    const target = event.target as HTMLElement;
+    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+
+    const cell = target.closest<HTMLElement>('td[data-field]');
+    const field = cell?.getAttribute('data-field');
+    const rowIndexAttr = cell?.closest('tr')?.getAttribute('data-row-index');
+    if (!cell || !field || rowIndexAttr === null || rowIndexAttr === undefined) return;
+    const rowIndex = Number(rowIndexAttr);
+
+    event.preventDefault();
+    if (key === 'c') {
+      navigator.clipboard?.writeText(copyCellText(rowIndex, field))?.catch(() => undefined);
+    } else {
+      navigator.clipboard?.readText()?.then(text => pasteAt(rowIndex, field, text)).catch(() => undefined);
+    }
   }
 
   const rowProps: DataRowProps = {
@@ -224,7 +261,7 @@ export function InanduGrid({
           </label>
         </div>
       )}
-      <table className="inandu-grid">
+      <table className="inandu-grid" onKeyDown={handleTableKeyDown}>
         <thead>
           <tr>
             {selectable && (
@@ -278,7 +315,9 @@ export function InanduGrid({
               <RowGroup key={group.key} group={group} aggregateColumns={aggregateColumns} aggregateLabel={aggregateLabel} extraColumnCount={extraColumnCount} {...rowProps} />
             ))
           ) : (
-            visibleRows.map((row, index) => <DataRow key={row['id'] != null ? String(row['id']) : index} row={row} rowIndex={index} {...rowProps} />)
+            visibleRows.map((row, index) => (
+              <DataRow key={row['id'] != null ? String(row['id']) : index} row={row} rowIndex={index} clipboard={clipboard} {...rowProps} />
+            ))
           )}
         </tbody>
         {aggregateColumns.length > 0 && (
@@ -330,6 +369,8 @@ interface DataRowProps {
   fieldErrors: Record<string, string>;
   isValidating: boolean;
   setRowDraftValue: (field: string, value: unknown) => void;
+  /** Adds the `data-row-index`/`data-field`/`tabIndex` attributes `handleTableKeyDown` resolves a Ctrl+C/Ctrl+V onto — only in the flat, non-grouped render path, same restriction grid-angular's clipboard has. */
+  clipboard?: boolean;
 }
 
 /** One data row — its own read-only cells, or (while it's the row being edited) `editableColumns` as controls bound to the shared draft, plus a trailing Edit/Save/Cancel/Delete actions cell when `hasRowActions`. */
@@ -355,18 +396,19 @@ function DataRow({
   fieldErrors,
   isValidating,
   setRowDraftValue,
+  clipboard = false,
 }: DataRowProps & { row: InanduGridRow; rowIndex: number }) {
   const editing = isEditingRow(row);
 
   return (
-    <tr>
+    <tr data-row-index={clipboard ? rowIndex : undefined}>
       {selectable && (
         <td>
           <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
         </td>
       )}
       {columns.map(column => (
-        <td key={column.field}>
+        <td key={column.field} data-field={clipboard ? column.field : undefined} tabIndex={clipboard ? 0 : undefined}>
           {editing && column.editable ? (
             <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
           ) : (

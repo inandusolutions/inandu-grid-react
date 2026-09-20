@@ -12,6 +12,7 @@ import {
   hasMeaningfulFilterValue,
   matchesColumnFilter,
   parseDraftValue,
+  parsePastedCellValue,
 } from '../core';
 import { createTranslator } from '../utils/translate';
 
@@ -48,6 +49,13 @@ export interface InanduGridColumn {
 export interface InanduGridRowSave {
   row: InanduGridRow;
   values: Record<string, unknown>;
+}
+
+/** One cell update from a `pasteAt()` call — one entry per pasted cell that landed on an existing row and an editable column. */
+export interface InanduGridCellPaste {
+  row: InanduGridRow;
+  field: string;
+  value: unknown;
 }
 
 function toColumnConfig(column: InanduGridColumn): ColumnConfig {
@@ -94,6 +102,8 @@ export interface UseInanduGridOptions {
   onRowDelete?: (row: InanduGridRow) => void;
   /** Emitted by `deleteSelectedRows()` (after confirmation, if any) — every currently-selected row. */
   onRowsDelete?: (rows: InanduGridRow[]) => void;
+  /** Emitted by `pasteAt()` with every parsed cell update — the grid never mutates `rows` itself. */
+  onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
 }
 
 /**
@@ -114,6 +124,7 @@ export function useInanduGrid({
   onRowCreate,
   onRowDelete,
   onRowsDelete,
+  onCellsPaste,
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
@@ -469,6 +480,42 @@ export function useInanduGrid({
     onRowCreate?.(values);
   }
 
+  /** The formatted text `Ctrl+C` would copy for the cell at `visibleRows[rowIndex]`/`field` — `''` if it doesn't resolve to a real, currently-paged cell. */
+  function copyCellText(rowIndex: number, field: string): string {
+    const row = visibleRows[rowIndex];
+    const column = columnConfigs.get(field);
+    if (!row || !column) return '';
+    return formatCellValue(row[field], column.type(), column.format(), locale);
+  }
+
+  /**
+   * Parses `text` as TSV (rows on line breaks, columns on tabs) and, anchored at `visibleRows[anchorRowIndex]`/`anchorField`'s
+   * position within `visibleRows`/`columns`, builds the `{ row, field, value }` updates for every
+   * pasted cell that lands on both an existing row and an *editable* column — same semantics as
+   * grid-angular's `pasteAt()`. A pasted block bigger than the remaining grid, or touching a
+   * non-editable column, is simply clipped there. Calls `onCellsPaste` once, only if there's at
+   * least one update.
+   */
+  function pasteAt(anchorRowIndex: number, anchorField: string, text: string): void {
+    const colIndex = columns.findIndex(c => c.field === anchorField);
+    if (anchorRowIndex === -1 || colIndex === -1) return;
+
+    const updates: InanduGridCellPaste[] = [];
+    // Excel/Sheets terminate a copied block with a trailing line break; without stripping it, the
+    // split below would produce one extra, entirely-empty phantom row past the real data.
+    const pastedRows = text.replace(/\r\n$|\r$|\n$/, '').split(/\r\n|\r|\n/).map(line => line.split('\t'));
+    pastedRows.forEach((pastedRow, rOffset) => {
+      const targetRow = visibleRows[anchorRowIndex + rOffset];
+      if (!targetRow) return;
+      pastedRow.forEach((cellText, cOffset) => {
+        const targetColumn = columns[colIndex + cOffset];
+        if (!targetColumn || !targetColumn.editable) return;
+        updates.push({ row: targetRow, field: targetColumn.field, value: parsePastedCellValue(cellText, targetColumn.type ?? 'string') });
+      });
+    });
+    if (updates.length > 0) onCellsPaste?.(updates);
+  }
+
   return {
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
@@ -515,5 +562,7 @@ export function useInanduGrid({
     cancelAddRow,
     saveNewRow,
     validateCell,
+    copyCellText,
+    pasteAt,
   };
 }

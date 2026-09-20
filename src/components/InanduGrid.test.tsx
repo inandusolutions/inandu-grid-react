@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
 
@@ -259,5 +259,41 @@ describe('InanduGrid', () => {
 
     vi.useRealTimers();
     openSpy.mockRestore();
+  });
+
+  it('copies the focused cell text with Ctrl+C', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    render(<InanduGrid rows={rows} columns={columns} clipboard />);
+    fireEvent.keyDown(screen.getByText('Beatriz'), { key: 'c', ctrlKey: true });
+
+    expect(writeText).toHaveBeenCalledWith('Beatriz');
+  });
+
+  it('pastes TSV text onto editable cells anchored at the focused cell with Ctrl+V', async () => {
+    const readText = vi.fn().mockResolvedValue('Carla\t50');
+    Object.defineProperty(navigator, 'clipboard', { value: { readText }, configurable: true });
+    const onCellsPaste = vi.fn();
+
+    render(<InanduGrid rows={rows} columns={editableColumns} clipboard onCellsPaste={onCellsPaste} />);
+    fireEvent.keyDown(screen.getByText('Beatriz'), { key: 'v', ctrlKey: true });
+
+    await waitFor(() =>
+      expect(onCellsPaste).toHaveBeenCalledWith([
+        { row: rows[0], field: 'name', value: 'Carla' },
+        { row: rows[0], field: 'age', value: 50 },
+      ]),
+    );
+  });
+
+  it('ignores Ctrl+C/Ctrl+V when clipboard is not enabled', () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    render(<InanduGrid rows={rows} columns={columns} />);
+    fireEvent.keyDown(screen.getByText('Beatriz'), { key: 'c', ctrlKey: true });
+
+    expect(writeText).not.toHaveBeenCalled();
   });
 });

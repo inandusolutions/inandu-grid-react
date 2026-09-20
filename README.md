@@ -11,9 +11,9 @@ folder and kept in sync by hand across the two repos. The React-specific layer �
 component and the `useInanduGrid()` headless hook — currently covers sorting (single- and, via
 shift-click, multi-column), free-text search,
 per-column filtering, pagination, single-column grouping with aggregates, row selection,
-CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a `lang` prop), and inline row
-editing/creation/deletion with validation (required/min/max/pattern/custom/async). Virtualization
-is not ported yet.
+CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a `lang` prop), inline row
+editing/creation/deletion with validation (required/min/max/pattern/custom/async), and Excel-style
+Ctrl+C/Ctrl+V clipboard copy/paste. Virtualization is not ported yet.
 
 - **Angular version:** [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) — the
   original, feature-complete, MIT-licensed grid. Start there if you need something production-ready
