@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
@@ -83,6 +91,9 @@ export function InanduGrid({
     toggleColumnVisibility,
     onColumnDragStart,
     onColumnDrop,
+    effectiveWidth,
+    isColumnResized,
+    setColumnWidth,
     visibleRows,
     exportRows,
     filteredRowCount,
@@ -144,10 +155,33 @@ export function InanduGrid({
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
   const [dragOverField, setDragOverField] = useState<string | undefined>(undefined);
+  const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
 
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedRows));
   }, [selectedRows, onSelectionChange]);
+
+  // The resize handle's drag: mousemove/mouseup are tracked on `window` (not the handle itself),
+  // since the pointer routinely leaves the handle and even the table while dragging — same reason
+  // grid-angular's own onResizeHandleMouseDown attaches its listeners there instead.
+  useEffect(() => {
+    if (!resizing) return;
+    const onMouseMove = (event: MouseEvent) => {
+      setColumnWidth(resizing.field, resizing.startWidth + (event.clientX - resizing.startX));
+    };
+    const onMouseUp = () => setResizing(null);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [resizing, setColumnWidth]);
+
+  function handleResizeMouseDown(event: ReactMouseEvent<HTMLSpanElement>, field: string) {
+    event.preventDefault();
+    setResizing({ field, startX: event.clientX, startWidth: effectiveWidth(field) });
+  }
 
   const aggregateColumns = visibleColumns.filter(column => column.aggregate);
   const groupableColumns = visibleColumns.filter(column => column.groupable !== false);
@@ -159,9 +193,16 @@ export function InanduGrid({
     setFilterValue(field, { ...filterValues[field], ...patch });
   }
 
-  /** `position: sticky` inline style + width for `column`'s `<th>`/`<td>`, per its `pinned`/`width` — same offsets grid-angular's `stickyOffset`/`stickyOffsetRight` compute, applied via CSS instead of a template class/binding. */
+  /**
+   * `position: sticky` inline style + width for `column`'s `<th>`/`<td>`, per its `pinned`/
+   * `effectiveWidth` — same offsets grid-angular's `stickyOffset`/`stickyOffsetRight` compute,
+   * applied via CSS instead of a template class/binding. No explicit `width` unless the column
+   * declared one or a resize drag set one — same as grid-angular, where an un-sized column's `<th>`/
+   * `<td>` auto-sizes to content and the `?? 80` fallback is only ever used for offset/PDF math.
+   */
   function columnStyle(column: InanduGridColumn): CSSProperties {
-    const style: CSSProperties = column.width !== undefined ? { width: column.width } : {};
+    const isSized = column.width !== undefined || isColumnResized(column.field);
+    const style: CSSProperties = isSized ? { width: effectiveWidth(column.field) } : {};
     if (column.pinned === 'left') return { ...style, position: 'sticky', left: stickyOffset(column.field), zIndex: 1 };
     if (column.pinned === 'right') return { ...style, position: 'sticky', right: stickyOffsetRight(column.field), zIndex: 1 };
     return style;
@@ -358,6 +399,12 @@ export function InanduGrid({
                   {column.headerText ?? column.field}
                   {direction ? (direction === 'asc' ? ' ▲' : ' ▼') : ''}
                   {priority !== undefined && <sup className="inandu-grid-sort-priority">{priority}</sup>}
+                  <span
+                    className="inandu-grid-resize-handle"
+                    onMouseDown={e => handleResizeMouseDown(e, column.field)}
+                    onClick={e => e.stopPropagation()}
+                    draggable={false}
+                  />
                 </th>
               );
             })}

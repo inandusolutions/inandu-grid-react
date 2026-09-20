@@ -14,8 +14,9 @@ per-column filtering, pagination, single-column grouping with aggregates, row se
 CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a `lang` prop), inline row
 editing/creation/deletion with validation (required/min/max/pattern/custom/async), Excel-style
 Ctrl+C/Ctrl+V clipboard copy/paste, runtime column show/hide, sticky (pinned left/right) columns,
-and column drag-reorder. Virtualization, column resize, row drag-reorder, and tree/master-detail
-data are not ported yet.
+column drag-reorder, and column resize (drag a header's handle; no autosize/fit-to-content yet, it
+needs real layout measurement). Virtualization, row drag-reorder, and tree/master-detail data are
+not ported yet.
 
 - **Angular version:** [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) — the
   original, feature-complete, MIT-licensed grid. Start there if you need something production-ready

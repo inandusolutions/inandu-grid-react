@@ -380,4 +380,28 @@ describe('InanduGrid', () => {
     const headerTexts = screen.getAllByRole('columnheader').map(header => header.textContent).filter(Boolean);
     expect(headerTexts).toEqual(['Name', 'Age', 'Note']);
   });
+
+  it('resizes a column by dragging its resize handle', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    const handle = nameHeader.querySelector('.inandu-grid-resize-handle')!;
+
+    fireEvent.mouseDown(handle, { clientX: 100 });
+    fireEvent.mouseMove(window, { clientX: 150 });
+    fireEvent.mouseUp(window);
+
+    expect(nameHeader.style.width).toBe('130px'); // no declared width -> 80 default, +50px dragged
+  });
+
+  it('clamps a resize to MIN_COLUMN_WIDTH', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    const handle = nameHeader.querySelector('.inandu-grid-resize-handle')!;
+
+    fireEvent.mouseDown(handle, { clientX: 0 });
+    fireEvent.mouseMove(window, { clientX: -1000 });
+    fireEvent.mouseUp(window);
+
+    expect(nameHeader.style.width).toBe('30px');
+  });
 });

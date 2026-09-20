@@ -12,6 +12,7 @@ import {
   formatCellValue,
   hasMeaningfulFilterValue,
   matchesColumnFilter,
+  MIN_COLUMN_WIDTH,
   parseDraftValue,
   parsePastedCellValue,
   SELECT_COLUMN_WIDTH,
@@ -153,6 +154,7 @@ export function useInanduGrid({
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
   const [reorderedFields, setReorderedFields] = useState<string[] | undefined>(undefined);
   const [draggingField, setDraggingField] = useState<string | undefined>(undefined);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
 
@@ -625,17 +627,34 @@ export function useInanduGrid({
     if (updates.length > 0) onCellsPaste?.(updates);
   }
 
+  /** A column's current rendered width: a resize-drag override if one exists, else its declared `width` (defaulting to 80, same fallback grid-angular's `effectiveWidth() || 80` uses). Same semantics as grid-angular's `effectiveWidth`. */
+  function effectiveWidth(field: string): number {
+    if (columnWidths[field] !== undefined) return columnWidths[field];
+    return orderedColumns.find(column => column.field === field)?.width ?? 80;
+  }
+
+  /** Whether `field` has a resize-drag (or `setColumnWidth()`) override — the caller uses this to decide whether to render an explicit `width` at all, vs. leaving an un-sized column to auto-size to content. */
+  function isColumnResized(field: string): boolean {
+    return columnWidths[field] !== undefined;
+  }
+
+  /** Sets a column's width directly, bypassing the resize-handle drag — clamped to `MIN_COLUMN_WIDTH`, same floor the drag handle enforces. No-ops if `field` doesn't match any current column. Same semantics as grid-angular's `setColumnWidth`. */
+  function setColumnWidth(field: string, width: number): void {
+    if (!orderedColumns.some(column => column.field === field)) return;
+    setColumnWidths(widths => ({ ...widths, [field]: Math.max(MIN_COLUMN_WIDTH, width) }));
+  }
+
   /**
    * The `left` offset (px) a `pinned: 'left'` column's `<th>`/`<td>` needs: the select-checkbox
    * column's width (always sticky-left, when rendered) plus every *other* left-pinned column's
-   * `width` (defaulting to 80, same fallback grid-angular's `effectiveWidth() || 80` uses) that
-   * renders before this one in `visibleColumns`. Same semantics as grid-angular's `stickyOffset`.
+   * `effectiveWidth` that renders before this one in `visibleColumns`. Same semantics as
+   * grid-angular's `stickyOffset`.
    */
   function stickyOffset(field: string): number {
     let offset = selectable ? SELECT_COLUMN_WIDTH : 0;
     for (const other of visibleColumns) {
       if (other.field === field) break;
-      if (other.pinned === 'left') offset += other.width ?? 80;
+      if (other.pinned === 'left') offset += effectiveWidth(other.field);
     }
     return offset;
   }
@@ -649,7 +668,7 @@ export function useInanduGrid({
         seen = true;
         continue;
       }
-      if (seen && other.pinned === 'right') offset += other.width ?? 80;
+      if (seen && other.pinned === 'right') offset += effectiveWidth(other.field);
     }
     return offset;
   }
@@ -665,6 +684,9 @@ export function useInanduGrid({
     draggingField,
     onColumnDragStart,
     onColumnDrop,
+    effectiveWidth,
+    isColumnResized,
+    setColumnWidth,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,
