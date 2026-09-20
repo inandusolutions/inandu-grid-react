@@ -26,4 +26,29 @@ describe('InanduGrid', () => {
     const cells = screen.getAllByRole('cell');
     expect(cells[0]).toHaveTextContent('Ana');
   });
+
+  it('filters a string column by its text filter', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    fireEvent.change(screen.getByLabelText('Filter Name'), { target: { value: 'ana' } });
+    expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(screen.queryByText('Beatriz')).not.toBeInTheDocument();
+  });
+
+  it('filters a number column by its min/max range', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    fireEvent.change(screen.getByLabelText('Filter Age min'), { target: { value: '35' } });
+    expect(screen.getByText('Beatriz')).toBeInTheDocument();
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+  });
+
+  it('paginates rows and navigates with Prev/Next', () => {
+    render(<InanduGrid rows={rows} columns={columns} pageSize={1} />);
+    expect(screen.getByText(/Page 1 of 2/)).toBeInTheDocument();
+    expect(screen.getByText('Beatriz')).toBeInTheDocument();
+    expect(screen.queryByText('Ana')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Next ›'));
+    expect(screen.getByText('Ana')).toBeInTheDocument();
+    expect(screen.getByText('Next ›')).toBeDisabled();
+  });
 });

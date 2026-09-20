@@ -43,16 +43,20 @@ export interface UseInanduGridOptions {
   rows: InanduGridRow[];
   columns: InanduGridColumn[];
   locale?: string;
+  /** 0 disables pagination — `visibleRows` is the full sorted/filtered set. Default: 0. */
+  pageSize?: number;
 }
 
 /**
- * Headless engine for the grid: owns sort + per-column filter state and derives `visibleRows`
- * from `rows` using the same pure core as grid-angular. No rendering — `<InanduGrid>` is one
- * consumer of this hook, not the only way to use it.
+ * Headless engine for the grid: owns sort + per-column filter + pagination state and derives
+ * `visibleRows` (the current page) and `filteredRowCount` (before pagination) from `rows` using
+ * the same pure core as grid-angular. No rendering — `<InanduGrid>` is one consumer of this hook,
+ * not the only way to use it.
  */
-export function useInanduGrid({ rows, columns, locale = 'en' }: UseInanduGridOptions) {
+export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: UseInanduGridOptions) {
   const [sort, setSort] = useState<InanduGridSort | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
+  const [page, setPage] = useState(0);
 
   const columnConfigs = useMemo(
     () => new Map(columns.map(column => [column.field, toColumnConfig(column)])),
@@ -60,10 +64,11 @@ export function useInanduGrid({ rows, columns, locale = 'en' }: UseInanduGridOpt
   );
 
   function setFilterValue(field: string, value: InanduGridColumnFilterValue) {
+    setPage(0);
     setFilterValues(prev => ({ ...prev, [field]: value }));
   }
 
-  const visibleRows = useMemo(() => {
+  const sortedFilteredRows = useMemo(() => {
     const activeFilters = Object.entries(filterValues).filter(([, value]) => hasMeaningfulFilterValue(value));
 
     let result = rows;
@@ -84,5 +89,24 @@ export function useInanduGrid({ rows, columns, locale = 'en' }: UseInanduGridOpt
     return result;
   }, [rows, columnConfigs, filterValues, sort, locale]);
 
-  return { visibleRows, sort, setSort, filterValues, setFilterValue };
+  const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(sortedFilteredRows.length / pageSize)) : 1;
+  const clampedPage = Math.min(page, pageCount - 1);
+
+  const visibleRows = useMemo(() => {
+    if (pageSize <= 0) return sortedFilteredRows;
+    const start = clampedPage * pageSize;
+    return sortedFilteredRows.slice(start, start + pageSize);
+  }, [sortedFilteredRows, pageSize, clampedPage]);
+
+  return {
+    visibleRows,
+    filteredRowCount: sortedFilteredRows.length,
+    sort,
+    setSort,
+    filterValues,
+    setFilterValue,
+    page: clampedPage,
+    setPage,
+    pageCount,
+  };
 }
