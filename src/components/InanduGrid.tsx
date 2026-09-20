@@ -44,6 +44,8 @@ export interface InanduGridProps {
   clipboard?: boolean;
   /** Called with every parsed cell update from a `Ctrl+V`. The grid never mutates `rows` itself. */
   onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
+  /** Adds a "Columns" toolbar button + popup letting the user show/hide individual columns at runtime. Default: false. */
+  columnToggle?: boolean;
 }
 
 /**
@@ -72,8 +74,13 @@ export function InanduGrid({
   onRowsDelete,
   clipboard = false,
   onCellsPaste,
+  columnToggle = false,
 }: InanduGridProps) {
   const {
+    visibleColumns,
+    hideableColumns,
+    isColumnHidden,
+    toggleColumnVisibility,
     visibleRows,
     exportRows,
     filteredRowCount,
@@ -136,8 +143,8 @@ export function InanduGrid({
     onSelectionChange?.(Array.from(selectedRows));
   }, [selectedRows, onSelectionChange]);
 
-  const aggregateColumns = columns.filter(column => column.aggregate);
-  const groupableColumns = columns.filter(column => column.groupable !== false);
+  const aggregateColumns = visibleColumns.filter(column => column.aggregate);
+  const groupableColumns = visibleColumns.filter(column => column.groupable !== false);
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
   const hasRowActions = editableColumns.length > 0 || deletable || creatable;
   const extraColumnCount = (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
@@ -183,7 +190,7 @@ export function InanduGrid({
   }
 
   const rowProps: DataRowProps = {
-    columns,
+    columns: visibleColumns,
     locale,
     t,
     selectable,
@@ -218,16 +225,16 @@ export function InanduGrid({
       <div className="inandu-grid-toolbar">
         {exportable && (
           <>
-            <button type="button" onClick={() => exportCsv(exportRows, columns, locale, exportFilenameBase)}>
+            <button type="button" onClick={() => exportCsv(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgExportCsv')}
             </button>
-            <button type="button" onClick={() => exportExcel(exportRows, columns, locale, exportFilenameBase)}>
+            <button type="button" onClick={() => exportExcel(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgExportExcel')}
             </button>
-            <button type="button" onClick={() => void exportPdf(exportRows, columns, locale, exportFilenameBase)}>
+            <button type="button" onClick={() => void exportPdf(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgExportPdf')}
             </button>
-            <button type="button" onClick={() => printTable(exportRows, columns, locale, exportFilenameBase)}>
+            <button type="button" onClick={() => printTable(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgPrint')}
             </button>
           </>
@@ -241,6 +248,26 @@ export function InanduGrid({
           <button type="button" onClick={deleteSelectedRows}>
             {t('MsgDeleteSelected', { count: selectedRows.size })}
           </button>
+        )}
+        {columnToggle && (
+          <details className="inandu-grid-column-toggle">
+            <summary>{t('MsgToggleColumns')}</summary>
+            <ul>
+              {hideableColumns.map(column => (
+                <li key={column.field}>
+                  <label>
+                    <input
+                      aria-label={t('MsgToggleColumn', { column: column.headerText ?? column.field })}
+                      type="checkbox"
+                      checked={!isColumnHidden(column.field)}
+                      onChange={() => toggleColumnVisibility(column.field)}
+                    />{' '}
+                    {column.headerText ?? column.field}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
       </div>
       {groupableColumns.length > 0 && (
@@ -277,7 +304,7 @@ export function InanduGrid({
                 />
               </th>
             )}
-            {columns.map(column => {
+            {visibleColumns.map(column => {
               const direction = sortDirectionFor(column.field);
               const priority = sortPriorityFor(column.field);
               return (
@@ -296,7 +323,7 @@ export function InanduGrid({
           </tr>
           <tr className="inandu-grid-filter-row">
             {selectable && <th />}
-            {columns.map(column => (
+            {visibleColumns.map(column => (
               <th key={column.field}>
                 <FilterControl column={column} value={filterValues[column.field]} onChange={patch => patchFilterValue(column.field, patch)} t={t} />
               </th>
@@ -308,7 +335,7 @@ export function InanduGrid({
           {isAddingRow && <NewRowDraft {...rowProps} onSave={() => void saveNewRow()} onCancel={cancelAddRow} />}
           {isEmpty ? (
             <tr>
-              <td colSpan={columns.length + extraColumnCount}>{t('MsgNoData')}</td>
+              <td colSpan={visibleColumns.length + extraColumnCount}>{t('MsgNoData')}</td>
             </tr>
           ) : groups ? (
             groups.map(group => (
@@ -324,7 +351,7 @@ export function InanduGrid({
           <tfoot>
             <tr className="inandu-grid-totals-row">
               {selectable && <td />}
-              {columns.map(column => (
+              {visibleColumns.map(column => (
                 <td key={column.field}>{column.aggregate ? aggregateLabel(column, totals) : ''}</td>
               ))}
               {hasRowActions && <td />}

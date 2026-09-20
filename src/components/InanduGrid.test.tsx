@@ -296,4 +296,25 @@ describe('InanduGrid', () => {
 
     expect(writeText).not.toHaveBeenCalled();
   });
+
+  it('hides and re-shows a column via the columns toggle popup', () => {
+    render(<InanduGrid rows={rows} columns={columns} columnToggle />);
+
+    expect(screen.getByRole('columnheader', { name: 'Sort by Age' })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Toggle Age'));
+    expect(screen.queryByRole('columnheader', { name: 'Sort by Age' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Toggle Age'));
+    expect(screen.getByRole('columnheader', { name: 'Sort by Age' })).toBeInTheDocument();
+  });
+
+  it('refuses to hide the only remaining visible column', () => {
+    render(<InanduGrid rows={rows} columns={columns} columnToggle />);
+
+    fireEvent.click(screen.getByLabelText('Toggle Age'));
+    fireEvent.click(screen.getByLabelText('Toggle Name'));
+
+    // Still just Age hidden — Name (the last one standing) refused to hide.
+    expect(screen.getByRole('columnheader', { name: 'Sort by Name' })).toBeInTheDocument();
+  });
 });

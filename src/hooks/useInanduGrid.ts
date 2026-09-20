@@ -43,6 +43,8 @@ export interface InanduGridColumn {
   validator?: (parsed: unknown, parsedRow: Record<string, unknown>) => string | null;
   /** Runs only once every synchronous rule (above) has already passed for this field; every field's async check runs concurrently. */
   asyncValidator?: (parsed: unknown, parsedRow: Record<string, unknown>) => Promise<string | null>;
+  /** Whether this column can be hidden via the column-visibility toggle. Default: true. */
+  hideable?: boolean;
 }
 
 /** Passed to `onRowSave` — everything `saveRow()` parsed and validated for one already-existing row. */
@@ -137,9 +139,42 @@ export function useInanduGrid({
   const [rowDraft, setRowDraft] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
+  const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
-  const editableColumns = useMemo(() => columns.filter(column => column.editable), [columns]);
+
+  /**
+   * `columns` minus whatever's currently hidden — what every other computation below operates over
+   * (search, filters, sort, grouping, aggregates, export, paste), same as grid-angular's
+   * `visibleColumns`. Always non-empty (see `toggleColumnVisibility`'s floor).
+   */
+  const visibleColumns = useMemo(
+    () => (hiddenFields.size === 0 ? columns : columns.filter(column => !hiddenFields.has(column.field))),
+    [columns, hiddenFields],
+  );
+
+  /** Every column that can be hidden, from the *full* `columns` list (not `visibleColumns`) — the toggle popup's checklist needs to list a currently-hidden column too, so it can be shown again. */
+  const hideableColumns = useMemo(() => columns.filter(column => column.hideable !== false), [columns]);
+
+  function isColumnHidden(field: string): boolean {
+    return hiddenFields.has(field);
+  }
+
+  /** Un-hiding is always allowed; hiding is refused if `field` is currently the only visible column left — see grid-angular's `toggleColumnVisibility` for why that floor exists. */
+  function toggleColumnVisibility(field: string): void {
+    if (hiddenFields.has(field)) {
+      setHiddenFields(fields => {
+        const next = new Set(fields);
+        next.delete(field);
+        return next;
+      });
+      return;
+    }
+    if (visibleColumns.length <= 1) return;
+    setHiddenFields(fields => new Set(fields).add(field));
+  }
+
+  const editableColumns = useMemo(() => visibleColumns.filter(column => column.editable), [visibleColumns]);
 
   function setFilterQuery(query: string) {
     setPage(0);
@@ -147,13 +182,13 @@ export function useInanduGrid({
   }
 
   const columnConfigs = useMemo(
-    () => new Map(columns.map(column => [column.field, toColumnConfig(column)])),
-    [columns],
+    () => new Map(visibleColumns.map(column => [column.field, toColumnConfig(column)])),
+    [visibleColumns],
   );
 
   const aggregateColumnConfigs = useMemo(
-    () => columns.filter(column => column.aggregate).map(column => columnConfigs.get(column.field)!),
-    [columns, columnConfigs],
+    () => visibleColumns.filter(column => column.aggregate).map(column => columnConfigs.get(column.field)!),
+    [visibleColumns, columnConfigs],
   );
 
   function setFilterValue(field: string, value: InanduGridColumnFilterValue) {
@@ -170,7 +205,7 @@ export function useInanduGrid({
     const query = filterQuery.trim().toLowerCase();
     if (query) {
       result = result.filter(row =>
-        columns.some(column => {
+        visibleColumns.some(column => {
           const config = columnConfigs.get(column.field)!;
           return formatCellValue(row[column.field], config.type(), config.format(), locale).toLowerCase().includes(query);
         }),
@@ -199,7 +234,7 @@ export function useInanduGrid({
     }
 
     return result;
-  }, [rows, columns, columnConfigs, filterQuery, filterValues, sortCriteria, locale]);
+  }, [rows, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, locale]);
 
   /**
    * `sortedFilteredRows` bucketed by the grouped column's *formatted* value, in first-seen order
@@ -497,7 +532,7 @@ export function useInanduGrid({
    * least one update.
    */
   function pasteAt(anchorRowIndex: number, anchorField: string, text: string): void {
-    const colIndex = columns.findIndex(c => c.field === anchorField);
+    const colIndex = visibleColumns.findIndex(c => c.field === anchorField);
     if (anchorRowIndex === -1 || colIndex === -1) return;
 
     const updates: InanduGridCellPaste[] = [];
@@ -508,7 +543,7 @@ export function useInanduGrid({
       const targetRow = visibleRows[anchorRowIndex + rOffset];
       if (!targetRow) return;
       pastedRow.forEach((cellText, cOffset) => {
-        const targetColumn = columns[colIndex + cOffset];
+        const targetColumn = visibleColumns[colIndex + cOffset];
         if (!targetColumn || !targetColumn.editable) return;
         updates.push({ row: targetRow, field: targetColumn.field, value: parsePastedCellValue(cellText, targetColumn.type ?? 'string') });
       });
@@ -517,6 +552,10 @@ export function useInanduGrid({
   }
 
   return {
+    visibleColumns,
+    hideableColumns,
+    isColumnHidden,
+    toggleColumnVisibility,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,
