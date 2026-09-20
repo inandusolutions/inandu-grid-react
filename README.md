@@ -15,8 +15,9 @@ CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a `lang` 
 editing/creation/deletion with validation (required/min/max/pattern/custom/async), Excel-style
 Ctrl+C/Ctrl+V clipboard copy/paste, runtime column show/hide, sticky (pinned left/right) columns,
 column drag-reorder, column resize (drag a header's handle; no autosize/fit-to-content yet, it
-needs real layout measurement), and row drag-reorder. Virtualization and tree/master-detail data
-are not ported yet.
+needs real layout measurement), row drag-reorder, and tree data (`treeChildrenKey`, display +
+expand only — no inline editing/drag/clipboard on tree rows, same restriction as grid-angular).
+Virtualization and master-detail rows are not ported yet.
 
 - **Angular version:** [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) — the
   original, feature-complete, MIT-licensed grid. Start there if you need something production-ready

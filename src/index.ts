@@ -12,6 +12,7 @@ export type {
   InanduGridColumnFilterValue,
   ColumnConfig,
   NumberFormatter,
+  TreeVisibleRow,
 } from './core';
 export { compareCellValues, formatCellValue, matchesColumnFilter, computeGroupAggregates, AGGREGATE_SYMBOLS } from './core';
 export { en, es, fr, it, zh, INANDU_GRID_TRANSLATIONS } from './core';

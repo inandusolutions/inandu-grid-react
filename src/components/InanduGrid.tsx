@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
-import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
+import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
@@ -58,6 +58,15 @@ export interface InanduGridProps {
   rowReorder?: boolean;
   /** Called with the fully reordered row array after a row drag-and-drop. The grid never mutates `rows` itself. */
   onRowOrderChange?: (rows: InanduGridRow[]) => void;
+  /**
+   * Turns on tree mode: the field on each row holding its child rows (a nested array of the same
+   * shape). `rows` is then the root rows. Auto-disabled while grouped. Tree rows are display +
+   * expand only — inline editing, drag-reorder and clipboard don't apply to them, same as
+   * grid-angular.
+   */
+  treeChildrenKey?: string;
+  /** Initial expand state for tree mode. Default: `'none'`. */
+  treeDefaultExpanded?: 'none' | 'all' | number;
 }
 
 /**
@@ -89,6 +98,8 @@ export function InanduGrid({
   columnToggle = false,
   rowReorder = false,
   onRowOrderChange,
+  treeChildrenKey,
+  treeDefaultExpanded = 'none',
 }: InanduGridProps) {
   const {
     visibleColumns,
@@ -146,6 +157,10 @@ export function InanduGrid({
     draggingRow,
     onRowDragStart,
     onRowDrop,
+    hasTreeData,
+    treeRows,
+    isTreeRowExpanded,
+    toggleTreeRow,
   } = useInanduGrid({
     rows,
     columns,
@@ -161,6 +176,8 @@ export function InanduGrid({
     onRowsDelete,
     onCellsPaste,
     onRowOrderChange,
+    treeChildrenKey,
+    treeDefaultExpanded,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
@@ -440,6 +457,17 @@ export function InanduGrid({
             <tr>
               <td colSpan={visibleColumns.length + extraColumnCount}>{t('MsgNoData')}</td>
             </tr>
+          ) : hasTreeData ? (
+            treeRows.map((node, index) => (
+              <TreeRow
+                key={node.row['id'] != null ? String(node.row['id']) : index}
+                node={node}
+                rowIndex={index}
+                isTreeRowExpanded={isTreeRowExpanded}
+                toggleTreeRow={toggleTreeRow}
+                {...rowProps}
+              />
+            ))
           ) : groups ? (
             groups.map(group => (
               <RowGroup key={group.key} group={group} aggregateColumns={aggregateColumns} aggregateLabel={aggregateLabel} extraColumnCount={extraColumnCount} {...rowProps} />
@@ -710,6 +738,83 @@ function RowGroup({ group, columns, aggregateColumns, aggregateLabel, extraColum
         <DataRow key={row['id'] != null ? String(row['id']) : `${group.key}:${index}`} row={row} rowIndex={index} columns={columns} {...rowProps} />
       ))}
     </>
+  );
+}
+
+interface TreeRowProps {
+  node: TreeVisibleRow<InanduGridRow>;
+  rowIndex: number;
+  columns: InanduGridColumn[];
+  locale: string;
+  t: Translator;
+  selectable: boolean;
+  selectColumnStyle: CSSProperties | undefined;
+  columnStyle: (column: InanduGridColumn) => CSSProperties;
+  isRowSelected: (row: InanduGridRow) => boolean;
+  toggleRowSelection: (row: InanduGridRow) => void;
+  hasRowActions: boolean;
+  isTreeRowExpanded: (row: InanduGridRow) => boolean;
+  toggleTreeRow: (row: InanduGridRow) => void;
+}
+
+/**
+ * One tree-data row — display + expand only (no inline editing, drag-reorder or clipboard, same
+ * restriction grid-angular has). The first visible column's cell carries the depth indent and an
+ * expand/collapse toggle when the node has children; every other cell renders like a normal data
+ * cell. Same layout as grid-angular's `#treeRow` template.
+ */
+function TreeRow({
+  node,
+  rowIndex,
+  columns,
+  locale,
+  t,
+  selectable,
+  selectColumnStyle,
+  columnStyle,
+  isRowSelected,
+  toggleRowSelection,
+  hasRowActions,
+  isTreeRowExpanded,
+  toggleTreeRow,
+}: TreeRowProps) {
+  const { row, depth, expandable } = node;
+  const expanded = isTreeRowExpanded(row);
+  const toggleLabel = expanded ? t('MsgCollapseDetail') : t('MsgExpandDetail');
+
+  return (
+    <tr aria-level={depth + 1} aria-expanded={expandable ? expanded : undefined}>
+      {selectable && (
+        <td style={selectColumnStyle}>
+          <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
+        </td>
+      )}
+      {columns.map((column, colIndex) => (
+        <td key={column.field} style={columnStyle(column)}>
+          {colIndex === 0 ? (
+            <span className="inandu-grid-tree-cell" style={{ paddingInlineStart: depth * 16 }}>
+              {expandable ? (
+                <button
+                  type="button"
+                  className="inandu-grid-tree-toggle"
+                  aria-label={toggleLabel}
+                  title={toggleLabel}
+                  onClick={() => toggleTreeRow(row)}
+                >
+                  {expanded ? '▾' : '▸'}
+                </button>
+              ) : (
+                <span className="inandu-grid-tree-toggle-spacer" aria-hidden="true" />
+              )}
+              {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
+            </span>
+          ) : (
+            formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
+          )}
+        </td>
+      ))}
+      {hasRowActions && <td className="inandu-grid-row-actions" />}
+    </tr>
   );
 }
 

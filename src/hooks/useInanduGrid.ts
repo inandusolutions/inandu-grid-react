@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ColumnConfig,
+  collectTreeRows,
+  flattenTree,
   InanduColumnAggregate,
   InanduColumnStickySide,
   InanduColumnType,
@@ -16,6 +18,7 @@ import {
   parseDraftValue,
   parsePastedCellValue,
   SELECT_COLUMN_WIDTH,
+  TreeVisibleRow,
 } from '../core';
 import { createTranslator } from '../utils/translate';
 
@@ -119,6 +122,16 @@ export interface UseInanduGridOptions {
   onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
   /** Emitted by `onRowDrop()` with the fully reordered row array — the grid never mutates `rows` itself. */
   onRowOrderChange?: (rows: InanduGridRow[]) => void;
+  /**
+   * Turns on tree mode: the name of the field on each row holding its child rows (a nested array
+   * of the same shape). `rows` is then the root rows; free-text/column filters keep a node when it
+   * or any descendant matches, and the active sort orders each level of siblings. Auto-disabled
+   * while grouped, same restriction grid-angular's `treeChildrenKey` has (there it also excludes
+   * virtual-scroll/server-side, neither of which this port has). Unset (default): tree mode off.
+   */
+  treeChildrenKey?: string;
+  /** Initial expand state for tree mode: `'none'` (default), `'all'`, or a max depth to open to. */
+  treeDefaultExpanded?: 'none' | 'all' | number;
 }
 
 /**
@@ -142,6 +155,8 @@ export function useInanduGrid({
   onRowsDelete,
   onCellsPaste,
   onRowOrderChange,
+  treeChildrenKey,
+  treeDefaultExpanded = 'none',
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
@@ -159,6 +174,8 @@ export function useInanduGrid({
   const [draggingField, setDraggingField] = useState<string | undefined>(undefined);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [draggingRow, setDraggingRow] = useState<InanduGridRow | undefined>(undefined);
+  const [expandedTreeRows, setExpandedTreeRows] = useState<Set<InanduGridRow>>(new Set());
+  const treeSeededForRef = useRef<InanduGridRow[] | undefined>(undefined);
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
 
@@ -347,17 +364,126 @@ export function useInanduGrid({
     [sortedFilteredRows, aggregateColumnConfigs],
   );
 
-  // Grouping bypasses pagination entirely, same as grid-angular — no meaningful "page" once rows
-  // are bucketed by group.
-  const paginationActive = pageSize > 0 && !groupByField;
+  /** Tree mode is on, and grouping (its one incompatible render path in this port) isn't. */
+  const hasTreeData = !!treeChildrenKey && !groupByField;
+
+  function childrenOf(row: InanduGridRow): readonly InanduGridRow[] | undefined {
+    const value = treeChildrenKey ? row[treeChildrenKey] : undefined;
+    return Array.isArray(value) ? (value as InanduGridRow[]) : undefined;
+  }
+
+  /**
+   * `rows` walked into the flat, expansion-aware list tree mode renders — free-text + column
+   * filters as a single per-row predicate (keeping a node when it or a descendant matches), the
+   * active sort ordering each level of siblings. Same semantics as grid-angular's `treeRows`.
+   */
+  const treeRows = useMemo<TreeVisibleRow<InanduGridRow>[]>(() => {
+    if (!hasTreeData) return [];
+
+    const query = filterQuery.trim().toLowerCase();
+    const activeFilters = Object.entries(filterValues).filter(([, value]) => hasMeaningfulFilterValue(value));
+    const anyFilter = !!query || activeFilters.length > 0;
+    const matches = anyFilter
+      ? (row: InanduGridRow): boolean => {
+          if (
+            query &&
+            !visibleColumns.some(column => {
+              const config = columnConfigs.get(column.field)!;
+              return formatCellValue(row[column.field], config.type(), config.format(), locale).toLowerCase().includes(query);
+            })
+          ) {
+            return false;
+          }
+          return activeFilters.every(([field, value]) => {
+            const column = columnConfigs.get(field);
+            return column ? matchesColumnFilter(column, row, value, locale) : true;
+          });
+        }
+      : undefined;
+
+    const compare =
+      sortCriteria.length > 0
+        ? (a: InanduGridRow, b: InanduGridRow): number => {
+            for (const { field, direction } of sortCriteria) {
+              const cmp = compareCellValues(a[field], b[field], locale) * (direction === 'asc' ? 1 : -1);
+              if (cmp !== 0) return cmp;
+            }
+            return 0;
+          }
+        : undefined;
+
+    return flattenTree(rows, { getChildren: childrenOf, isExpanded: row => expandedTreeRows.has(row), match: matches, compare });
+  }, [hasTreeData, rows, treeChildrenKey, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, expandedTreeRows, locale]);
+
+  // Seeds `expandedTreeRows` from `treeDefaultExpanded` the first time a given `rows` array is
+  // seen — same "once per distinct data(), not on every re-render" behavior grid-angular's own
+  // seeding effect has (a user's own subsequent expand/collapse clicks must survive re-renders).
+  useEffect(() => {
+    if (!hasTreeData || treeSeededForRef.current === rows) return;
+    treeSeededForRef.current = rows;
+    if (treeDefaultExpanded === 'none') {
+      setExpandedTreeRows(new Set());
+      return;
+    }
+    const next = new Set<InanduGridRow>();
+    if (treeDefaultExpanded === 'all') {
+      for (const row of collectTreeRows(rows, childrenOf)) {
+        if (childrenOf(row)?.length) next.add(row);
+      }
+    } else {
+      const walk = (level: readonly InanduGridRow[], depth: number): void => {
+        if (depth >= treeDefaultExpanded) return;
+        for (const row of level) {
+          const kids = childrenOf(row);
+          if (kids?.length) {
+            next.add(row);
+            walk(kids, depth + 1);
+          }
+        }
+      };
+      walk(rows, 0);
+    }
+    setExpandedTreeRows(next);
+  }, [hasTreeData, rows, treeDefaultExpanded]);
+
+  function isTreeRowExpanded(row: InanduGridRow): boolean {
+    return expandedTreeRows.has(row);
+  }
+
+  function toggleTreeRow(row: InanduGridRow): void {
+    setExpandedTreeRows(open => {
+      const next = new Set(open);
+      if (next.has(row)) next.delete(row);
+      else next.add(row);
+      return next;
+    });
+  }
+
+  /** Expand or collapse every expandable node at once. */
+  function setAllTreeRowsExpanded(expanded: boolean): void {
+    if (!expanded) {
+      setExpandedTreeRows(new Set());
+      return;
+    }
+    const next = new Set<InanduGridRow>();
+    for (const row of collectTreeRows(rows, childrenOf)) {
+      if (childrenOf(row)?.length) next.add(row);
+    }
+    setExpandedTreeRows(next);
+  }
+
+  // Grouping and tree mode both bypass pagination entirely, same as grid-angular — neither has a
+  // meaningful "page" (rows are bucketed by group, or nested by parent/child).
+  const paginationActive = pageSize > 0 && !groupByField && !hasTreeData;
   const pageCount = paginationActive ? Math.max(1, Math.ceil(sortedFilteredRows.length / pageSize)) : 1;
   const clampedPage = Math.min(page, pageCount - 1);
 
   const visibleRows = useMemo(() => {
+    if (hasTreeData) return treeRows.map(t => t.row);
     if (!paginationActive) return sortedFilteredRows;
     const start = clampedPage * pageSize;
     return sortedFilteredRows.slice(start, start + pageSize);
-  }, [sortedFilteredRows, paginationActive, pageSize, clampedPage]);
+  }, [hasTreeData, treeRows, sortedFilteredRows, paginationActive, pageSize, clampedPage]);
 
   /** Rows the "select all" checkbox governs — every group's rows when grouped, or just the current page otherwise (mirrors grid-angular's `pagedData()`/grouped `rows` distinction, minus its virtual-scroll case). */
   const selectionScopeRows = groupByField ? sortedFilteredRows : visibleRows;
@@ -715,6 +841,11 @@ export function useInanduGrid({
     draggingRow,
     onRowDragStart,
     onRowDrop,
+    hasTreeData,
+    treeRows,
+    isTreeRowExpanded,
+    toggleTreeRow,
+    setAllTreeRowsExpanded,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,

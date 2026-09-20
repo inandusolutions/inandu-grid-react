@@ -424,4 +424,49 @@ describe('InanduGrid', () => {
 
     expect(screen.queryAllByLabelText('Drag to reorder row')).toHaveLength(0);
   });
+
+  it('renders tree data collapsed by default and expands on toggle click', () => {
+    const treeRows = [
+      { name: 'Fruits', kids: [{ name: 'Apple' }, { name: 'Banana' }] },
+      { name: 'Vegetables', kids: [{ name: 'Carrot' }] },
+    ];
+    render(<InanduGrid rows={treeRows} columns={[{ field: 'name', headerText: 'Name' }]} treeChildrenKey="kids" />);
+
+    expect(screen.getByText('Fruits')).toBeInTheDocument();
+    expect(screen.queryByText('Apple')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByLabelText('Expand row details')[0]);
+    expect(screen.getByText('Apple')).toBeInTheDocument();
+    expect(screen.getByText('Banana')).toBeInTheDocument();
+    expect(screen.queryByText('Carrot')).not.toBeInTheDocument(); // Vegetables still collapsed
+  });
+
+  it('starts fully expanded with treeDefaultExpanded="all"', () => {
+    const treeRows = [{ name: 'Fruits', kids: [{ name: 'Apple' }] }];
+    render(
+      <InanduGrid
+        rows={treeRows}
+        columns={[{ field: 'name', headerText: 'Name' }]}
+        treeChildrenKey="kids"
+        treeDefaultExpanded="all"
+      />,
+    );
+
+    expect(screen.getByText('Apple')).toBeInTheDocument();
+  });
+
+  it('keeps a matching descendant visible (and its ancestor auto-expanded) under free-text search', () => {
+    const treeRows = [
+      { name: 'Fruits', kids: [{ name: 'Apple' }, { name: 'Banana' }] },
+      { name: 'Vegetables', kids: [{ name: 'Carrot' }] },
+    ];
+    render(<InanduGrid rows={treeRows} columns={[{ field: 'name', headerText: 'Name' }]} treeChildrenKey="kids" />);
+
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'apple' } });
+
+    expect(screen.getByText('Fruits')).toBeInTheDocument(); // ancestor of the match, auto-expanded
+    expect(screen.getByText('Apple')).toBeInTheDocument();
+    expect(screen.queryByText('Banana')).not.toBeInTheDocument(); // sibling, doesn't match
+    expect(screen.queryByText('Vegetables')).not.toBeInTheDocument(); // no matching descendant
+  });
 });
