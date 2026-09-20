@@ -343,4 +343,41 @@ describe('InanduGrid', () => {
     expect(screen.getByRole('columnheader', { name: 'Sort by Age' }).style.right).toBe('90px'); // note's width, which renders after it
     expect(screen.getByRole('columnheader', { name: 'Sort by Note' }).style.right).toBe('0px');
   });
+
+  it('reorders columns by dragging a header and dropping it onto another', () => {
+    const threeColumns = [
+      { field: 'name', headerText: 'Name' },
+      { field: 'age', headerText: 'Age', type: 'number' as const },
+      { field: 'note', headerText: 'Note' },
+    ];
+    render(<InanduGrid rows={[{ name: 'Beatriz', age: 41, note: 'x' }]} columns={threeColumns} />);
+
+    const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    const noteHeader = screen.getByRole('columnheader', { name: 'Sort by Note' });
+    const dataTransfer = { setData: vi.fn() };
+    fireEvent.dragStart(nameHeader, { dataTransfer });
+    fireEvent.dragOver(noteHeader, { dataTransfer });
+    fireEvent.drop(noteHeader, { dataTransfer });
+
+    const headerTexts = screen.getAllByRole('columnheader').map(header => header.textContent).filter(Boolean);
+    expect(headerTexts).toEqual(['Age', 'Name', 'Note']);
+  });
+
+  it('does not reorder a column whose reorder is disabled', () => {
+    const threeColumns = [
+      { field: 'name', headerText: 'Name', reorder: false },
+      { field: 'age', headerText: 'Age', type: 'number' as const },
+      { field: 'note', headerText: 'Note' },
+    ];
+    render(<InanduGrid rows={[{ name: 'Beatriz', age: 41, note: 'x' }]} columns={threeColumns} />);
+
+    const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    const noteHeader = screen.getByRole('columnheader', { name: 'Sort by Note' });
+    const dataTransfer = { setData: vi.fn() };
+    fireEvent.dragStart(nameHeader, { dataTransfer });
+    fireEvent.drop(noteHeader, { dataTransfer });
+
+    const headerTexts = screen.getAllByRole('columnheader').map(header => header.textContent).filter(Boolean);
+    expect(headerTexts).toEqual(['Name', 'Age', 'Note']);
+  });
 });

@@ -51,6 +51,8 @@ export interface InanduGridColumn {
   pinned?: InanduColumnStickySide;
   /** Fixed column width in px — also what `stickyOffset`/`stickyOffsetRight` stack against. Default (unset): 80, same fallback grid-angular's `effectiveWidth() || 80` uses. */
   width?: number;
+  /** Whether this column's header can be dragged to reorder columns. Default: true. */
+  reorder?: boolean;
 }
 
 /** Passed to `onRowSave` — everything `saveRow()` parsed and validated for one already-existing row. */
@@ -149,21 +151,84 @@ export function useInanduGrid({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
+  const [reorderedFields, setReorderedFields] = useState<string[] | undefined>(undefined);
+  const [draggingField, setDraggingField] = useState<string | undefined>(undefined);
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
 
   /**
-   * `columns` minus whatever's currently hidden — what every other computation below operates over
-   * (search, filters, sort, grouping, aggregates, export, paste), same as grid-angular's
-   * `visibleColumns`. Always non-empty (see `toggleColumnVisibility`'s floor).
+   * `columns` in `reorderedFields`'s order, if any drag-reorder (or `setColumnOrder()`) has
+   * happened yet — a field `reorderedFields` doesn't mention (new since the last reorder) "flows in
+   * at the end", same as grid-angular's `displayColumns()`. Includes hidden columns, same as
+   * grid-angular's `displayColumns()` — only `visibleColumns` (below) filters those out.
+   */
+  const orderedColumns = useMemo(() => {
+    if (!reorderedFields) return columns;
+    const byField = new Map(columns.map(column => [column.field, column]));
+    const ordered: InanduGridColumn[] = [];
+    for (const field of reorderedFields) {
+      const column = byField.get(field);
+      if (column) {
+        ordered.push(column);
+        byField.delete(field);
+      }
+    }
+    ordered.push(...byField.values());
+    return ordered;
+  }, [columns, reorderedFields]);
+
+  /**
+   * `orderedColumns` minus whatever's currently hidden — what every other computation below
+   * operates over (search, filters, sort, grouping, aggregates, export, paste), same as
+   * grid-angular's `visibleColumns`. Always non-empty (see `toggleColumnVisibility`'s floor).
    */
   const visibleColumns = useMemo(
-    () => (hiddenFields.size === 0 ? columns : columns.filter(column => !hiddenFields.has(column.field))),
-    [columns, hiddenFields],
+    () => (hiddenFields.size === 0 ? orderedColumns : orderedColumns.filter(column => !hiddenFields.has(column.field))),
+    [orderedColumns, hiddenFields],
   );
 
-  /** Every column that can be hidden, from the *full* `columns` list (not `visibleColumns`) — the toggle popup's checklist needs to list a currently-hidden column too, so it can be shown again. */
-  const hideableColumns = useMemo(() => columns.filter(column => column.hideable !== false), [columns]);
+  /** Every column that can be hidden, from the *full* `orderedColumns` list (not `visibleColumns`) — the toggle popup's checklist needs to list a currently-hidden column too, so it can be shown again. */
+  const hideableColumns = useMemo(() => orderedColumns.filter(column => column.hideable !== false), [orderedColumns]);
+
+  /**
+   * Sets the full column order directly, bypassing the header drag-and-drop gesture. `fields`
+   * should list every column's field, in the desired order; any field it omits keeps its current
+   * relative position and is appended after the fields it does list — so passing a subset is safe.
+   * Fields that don't match any current column are ignored. Same semantics as grid-angular's
+   * `setColumnOrder`.
+   */
+  function setColumnOrder(fields: readonly string[]): void {
+    const current = orderedColumns.map(column => column.field);
+    const currentSet = new Set(current);
+    const requested = fields.filter(field => currentSet.has(field));
+    const requestedSet = new Set(requested);
+    const remaining = current.filter(field => !requestedSet.has(field));
+    setReorderedFields([...requested, ...remaining]);
+  }
+
+  function onColumnDragStart(field: string): void {
+    setDraggingField(field);
+  }
+
+  /** Dropping a dragged header onto another header — inserts the dragged column immediately before `targetField`. Same semantics (and `reorder: false` opt-out) as grid-angular's `onColumnHeaderDrop`. */
+  function onColumnDrop(targetField: string): void {
+    const draggedField = draggingField;
+    setDraggingField(undefined);
+    if (!draggedField || draggedField === targetField) return;
+
+    const draggedColumn = orderedColumns.find(column => column.field === draggedField);
+    if (!draggedColumn || draggedColumn.reorder === false) return;
+
+    const fields = orderedColumns.map(column => column.field);
+    const fromIndex = fields.indexOf(draggedField);
+    let toIndex = fields.indexOf(targetField);
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    fields.splice(fromIndex, 1);
+    if (fromIndex < toIndex) toIndex--; // the removal above shifted every later index down by one
+    fields.splice(toIndex, 0, draggedField);
+    setColumnOrder(fields);
+  }
 
   function isColumnHidden(field: string): boolean {
     return hiddenFields.has(field);
@@ -596,6 +661,10 @@ export function useInanduGrid({
     hideableColumns,
     isColumnHidden,
     toggleColumnVisibility,
+    setColumnOrder,
+    draggingField,
+    onColumnDragStart,
+    onColumnDrop,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,

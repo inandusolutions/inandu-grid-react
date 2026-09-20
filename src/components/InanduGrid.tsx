@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
@@ -81,6 +81,8 @@ export function InanduGrid({
     hideableColumns,
     isColumnHidden,
     toggleColumnVisibility,
+    onColumnDragStart,
+    onColumnDrop,
     visibleRows,
     exportRows,
     filteredRowCount,
@@ -141,6 +143,7 @@ export function InanduGrid({
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
+  const [dragOverField, setDragOverField] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedRows));
@@ -162,6 +165,22 @@ export function InanduGrid({
     if (column.pinned === 'left') return { ...style, position: 'sticky', left: stickyOffset(column.field), zIndex: 1 };
     if (column.pinned === 'right') return { ...style, position: 'sticky', right: stickyOffsetRight(column.field), zIndex: 1 };
     return style;
+  }
+
+  function handleHeaderDragStart(event: ReactDragEvent<HTMLTableCellElement>, field: string) {
+    onColumnDragStart(field);
+    event.dataTransfer.setData('text/plain', field);
+  }
+
+  function handleHeaderDragOver(event: ReactDragEvent<HTMLTableCellElement>, field: string) {
+    event.preventDefault(); // required so the browser allows a subsequent 'drop' to fire here
+    setDragOverField(field);
+  }
+
+  function handleHeaderDrop(event: ReactDragEvent<HTMLTableCellElement>, targetField: string) {
+    event.preventDefault();
+    setDragOverField(undefined);
+    onColumnDrop(targetField);
   }
 
   /** The select-checkbox column is always sticky-left (offset 0) when rendered — grid-angular's posture too. */
@@ -327,6 +346,12 @@ export function InanduGrid({
                 <th
                   key={column.field}
                   style={columnStyle(column)}
+                  className={dragOverField === column.field ? 'inandu-drag-over' : undefined}
+                  draggable={column.reorder !== false}
+                  onDragStart={e => handleHeaderDragStart(e, column.field)}
+                  onDragOver={e => handleHeaderDragOver(e, column.field)}
+                  onDragLeave={() => setDragOverField(current => (current === column.field ? undefined : current))}
+                  onDrop={e => handleHeaderDrop(e, column.field)}
                   onClick={e => toggleSort(column.field, e.shiftKey)}
                   aria-label={t('MsgSortBy', { column: column.headerText ?? column.field })}
                 >
