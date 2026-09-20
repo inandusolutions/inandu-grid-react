@@ -1,0 +1,88 @@
+{
+  "name": "@inandu-solutions/grid-react",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone React data grid: sorting, free-text and per-column filtering, grouping, pagination, CSV/Excel/PDF export and print, i18n (5 languages) and theming, with a deliberately small dependency footprint. The React port of @inandu-solutions/grid-angular.",
+  "keywords": [
+    "react",
+    "react-grid",
+    "react-datagrid",
+    "react-table",
+    "react-component",
+    "data-grid",
+    "datagrid",
+    "grid",
+    "table",
+    "data-table",
+    "virtual-scroll",
+    "pagination",
+    "grouping",
+    "inline-editing",
+    "csv-export",
+    "excel-export",
+    "i18n",
+    "hooks",
+    "headless"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Inandu SAS",
+    "url": "https://inandu.com"
+  },
+  "homepage": "https://github.com/inandusolutions/inandu-grid-react#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/inandusolutions/inandu-grid-react.git"
+  },
+  "bugs": {
+    "url": "https://github.com/inandusolutions/inandu-grid-react/issues"
+  },
+  "type": "module",
+  "main": "./dist/inandu-grid-react.cjs",
+  "module": "./dist/inandu-grid-react.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/inandu-grid-react.js",
+      "require": "./dist/inandu-grid-react.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.0",
+    "vite-plugin-dts": "^5.1.1",
+    "vitest": "^5.0.1"
+  }
+}

@@ -1,0 +1,45 @@
+/*
+ * Framework-agnostic core of the grid — pure logic with zero React dependency, ported from
+ * @inandu-solutions/grid-angular's `projects/inandu-grid/src/lib/core/` (kept in sync by hand;
+ * see that repo's core/index.ts for the Angular side of this same module).
+ */
+export type {
+  InanduColumnType,
+  InanduColumnStickySide,
+  InanduColumnAggregate,
+  InanduGridRow,
+  InanduGridColumnFilterValue,
+  ColumnConfig,
+} from './types';
+
+export {
+  MIN_COLUMN_WIDTH,
+  MAX_COLUMN_WIDTH,
+  SELECT_COLUMN_WIDTH,
+  ROW_DRAG_COLUMN_WIDTH,
+  DETAIL_TOGGLE_COLUMN_WIDTH,
+  STATE_STORAGE_PREFIX,
+} from './constants';
+
+export {
+  coerceToDate,
+  formatDateValue,
+  formatCellValue,
+  defaultNumberFormatter,
+} from './format';
+export type { NumberFormatter } from './format';
+
+export { compareCellValues } from './sort';
+export { flattenTree, collectTreeRows } from './tree';
+export type { TreeVisibleRow, FlattenTreeOptions } from './tree';
+export { hasMeaningfulFilterValue, matchesColumnFilter } from './filter';
+export { AGGREGATE_SYMBOLS, computeGroupAggregates } from './aggregate';
+export { placeColumnsByOrder } from './columns';
+export { parseDraftValue, parsePastedCellValue } from './parse';
+
+export { escapeCsvValue } from './export/csv';
+export { escapeMarkup } from './export/markup';
+export { truncatePdfText } from './export/pdf';
+export { downloadBlob } from './export/download';
+
+export { en, es, fr, it, zh, INANDU_GRID_TRANSLATIONS } from './i18n';
