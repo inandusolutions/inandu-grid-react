@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
 
 const columns = [
@@ -87,5 +87,26 @@ describe('InanduGrid', () => {
     expect(screen.queryByText(/Page \d+ of \d+/)).not.toBeInTheDocument();
     expect(screen.getAllByText('North').length).toBeGreaterThan(0);
     expect(screen.getAllByText('South').length).toBeGreaterThan(0);
+  });
+
+  it('selects individual rows and reports the selection', () => {
+    const onSelectionChange = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} selectable onSelectionChange={onSelectionChange} />);
+
+    const rowCheckboxes = screen.getAllByLabelText('Select row');
+    fireEvent.click(rowCheckboxes[0]);
+
+    expect(onSelectionChange).toHaveBeenLastCalledWith([rows[0]]);
+  });
+
+  it('selects and deselects all rows with the header checkbox', () => {
+    const onSelectionChange = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} selectable onSelectionChange={onSelectionChange} />);
+
+    fireEvent.click(screen.getByLabelText('Select all'));
+    expect(onSelectionChange).toHaveBeenLastCalledWith(rows);
+
+    fireEvent.click(screen.getByLabelText('Select all'));
+    expect(onSelectionChange).toHaveBeenLastCalledWith([]);
   });
 });

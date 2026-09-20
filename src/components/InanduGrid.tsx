@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
 import { InanduGridColumn, useInanduGrid } from '../hooks/useInanduGrid';
@@ -8,6 +9,10 @@ export interface InanduGridProps {
   locale?: string;
   /** 0 (default) disables pagination — every filtered/sorted row renders. Ignored while grouped. */
   pageSize?: number;
+  /** Adds a checkbox column with row + select-all selection. Default: false. */
+  selectable?: boolean;
+  /** Called after every selection change with the current full selection, as an array. */
+  onSelectionChange?: (selectedRows: InanduGridRow[]) => void;
 }
 
 /**
@@ -15,7 +20,7 @@ export interface InanduGridProps {
  * single-column grouping with per-group + grand-total aggregates. Virtualization and inline
  * editing (both present in grid-angular) land in later passes.
  */
-export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: InanduGridProps) {
+export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0, selectable = false, onSelectionChange }: InanduGridProps) {
   const {
     visibleRows,
     filteredRowCount,
@@ -32,7 +37,17 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
     setGroupByField,
     groups,
     totals,
+    selectedRows,
+    isRowSelected,
+    toggleRowSelection,
+    allSelected,
+    someSelected,
+    toggleSelectAll,
   } = useInanduGrid({ rows, columns, locale, pageSize });
+
+  useEffect(() => {
+    onSelectionChange?.(Array.from(selectedRows));
+  }, [selectedRows, onSelectionChange]);
 
   const aggregateColumns = columns.filter(column => column.aggregate);
   const groupableColumns = columns.filter(column => column.groupable !== false);
@@ -89,6 +104,19 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
       <table className="inandu-grid">
         <thead>
           <tr>
+            {selectable && (
+              <th>
+                <input
+                  aria-label="Select all"
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={el => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={toggleSelectAll}
+                />
+              </th>
+            )}
             {columns.map(column => (
               <th key={column.field} onClick={() => toggleSort(column.field)}>
                 {column.headerText ?? column.field}
@@ -97,6 +125,7 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
             ))}
           </tr>
           <tr className="inandu-grid-filter-row">
+            {selectable && <th />}
             {columns.map(column => (
               <th key={column.field}>
                 <FilterControl
@@ -118,10 +147,23 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
                   aggregateColumns={aggregateColumns}
                   locale={locale}
                   aggregateLabel={aggregateLabel}
+                  selectable={selectable}
+                  isRowSelected={isRowSelected}
+                  toggleRowSelection={toggleRowSelection}
                 />
               ))
             : visibleRows.map((row, index) => (
                 <tr key={row['id'] != null ? String(row['id']) : index}>
+                  {selectable && (
+                    <td>
+                      <input
+                        aria-label="Select row"
+                        type="checkbox"
+                        checked={isRowSelected(row)}
+                        onChange={() => toggleRowSelection(row)}
+                      />
+                    </td>
+                  )}
                   {columns.map(column => (
                     <td key={column.field}>
                       {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
@@ -133,6 +175,7 @@ export function InanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Inand
         {aggregateColumns.length > 0 && (
           <tfoot>
             <tr className="inandu-grid-totals-row">
+              {selectable && <td />}
               {columns.map(column => (
                 <td key={column.field}>{column.aggregate ? aggregateLabel(column, totals) : ''}</td>
               ))}
@@ -163,14 +206,26 @@ interface RowGroupProps {
   aggregateColumns: InanduGridColumn[];
   locale: string;
   aggregateLabel: (column: InanduGridColumn, aggregates: Record<string, number>) => string;
+  selectable: boolean;
+  isRowSelected: (row: InanduGridRow) => boolean;
+  toggleRowSelection: (row: InanduGridRow) => void;
 }
 
 /** One group header row (key + row count + per-aggregate-column labels) followed by its own data rows. */
-function RowGroup({ group, columns, aggregateColumns, locale, aggregateLabel }: RowGroupProps) {
+function RowGroup({
+  group,
+  columns,
+  aggregateColumns,
+  locale,
+  aggregateLabel,
+  selectable,
+  isRowSelected,
+  toggleRowSelection,
+}: RowGroupProps) {
   return (
     <>
       <tr className="inandu-grid-group-row">
-        <td colSpan={columns.length}>
+        <td colSpan={columns.length + (selectable ? 1 : 0)}>
           <strong>{group.key}</strong> ({group.rows.length})
           {aggregateColumns.length > 0 && (
             <span className="inandu-grid-group-aggregates">
@@ -183,6 +238,16 @@ function RowGroup({ group, columns, aggregateColumns, locale, aggregateLabel }: 
       </tr>
       {group.rows.map((row, index) => (
         <tr key={row['id'] != null ? String(row['id']) : `${group.key}:${index}`}>
+          {selectable && (
+            <td>
+              <input
+                aria-label="Select row"
+                type="checkbox"
+                checked={isRowSelected(row)}
+                onChange={() => toggleRowSelection(row)}
+              />
+            </td>
+          )}
           {columns.map(column => (
             <td key={column.field}>
               {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}

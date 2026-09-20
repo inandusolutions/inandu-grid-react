@@ -72,6 +72,7 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
   const [filterQuery, setFilterQueryState] = useState('');
   const [page, setPage] = useState(0);
   const [groupByField, setGroupByField] = useState<string | undefined>(undefined);
+  const [selectedRows, setSelectedRows] = useState<Set<InanduGridRow>>(new Set());
 
   function setFilterQuery(query: string) {
     setPage(0);
@@ -170,6 +171,41 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
     return sortedFilteredRows.slice(start, start + pageSize);
   }, [sortedFilteredRows, paginationActive, pageSize, clampedPage]);
 
+  /** Rows the "select all" checkbox governs — every group's rows when grouped, or just the current page otherwise (mirrors grid-angular's `pagedData()`/grouped `rows` distinction, minus its virtual-scroll case). */
+  const selectionScopeRows = groupByField ? sortedFilteredRows : visibleRows;
+
+  function isRowSelected(row: InanduGridRow): boolean {
+    return selectedRows.has(row);
+  }
+
+  function toggleRowSelection(row: InanduGridRow): void {
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(row)) next.delete(row);
+      else next.add(row);
+      return next;
+    });
+  }
+
+  const allSelected = selectionScopeRows.length > 0 && selectionScopeRows.every(row => selectedRows.has(row));
+  const someSelected = !allSelected && selectionScopeRows.some(row => selectedRows.has(row));
+
+  function toggleSelectAll(): void {
+    const selectAll = !allSelected;
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      for (const row of selectionScopeRows) {
+        if (selectAll) next.add(row);
+        else next.delete(row);
+      }
+      return next;
+    });
+  }
+
+  function clearSelection(): void {
+    setSelectedRows(new Set());
+  }
+
   return {
     visibleRows,
     filteredRowCount: sortedFilteredRows.length,
@@ -186,5 +222,12 @@ export function useInanduGrid({ rows, columns, locale = 'en', pageSize = 0 }: Us
     setGroupByField,
     groups,
     totals,
+    selectedRows,
+    isRowSelected,
+    toggleRowSelection,
+    allSelected,
+    someSelected,
+    toggleSelectAll,
+    clearSelection,
   };
 }
