@@ -198,6 +198,7 @@ export function InanduGrid({
     pasteAt,
     stickyOffset,
     stickyOffsetRight,
+    columnPinnedSide,
     draggingRow,
     onRowDragStart,
     onRowDrop,
@@ -308,8 +309,9 @@ export function InanduGrid({
   function columnStyle(column: InanduGridColumn): CSSProperties {
     const isSized = column.width !== undefined || isColumnResized(column.field);
     const style: CSSProperties = isSized ? { width: effectiveWidth(column.field) } : {};
-    if (column.pinned === 'left') return { ...style, position: 'sticky', left: stickyOffset(column.field), zIndex: 1 };
-    if (column.pinned === 'right') return { ...style, position: 'sticky', right: stickyOffsetRight(column.field), zIndex: 1 };
+    const pinned = columnPinnedSide(column.field);
+    if (pinned === 'left') return { ...style, position: 'sticky', left: stickyOffset(column.field), zIndex: 1 };
+    if (pinned === 'right') return { ...style, position: 'sticky', right: stickyOffsetRight(column.field), zIndex: 1 };
     return style;
   }
 

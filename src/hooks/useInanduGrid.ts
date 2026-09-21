@@ -186,6 +186,7 @@ export function useInanduGrid({
   const [reorderedFields, setReorderedFields] = useState<string[] | undefined>(undefined);
   const [draggingField, setDraggingField] = useState<string | undefined>(undefined);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [pinnedOverrides, setPinnedOverrides] = useState<Record<string, InanduColumnStickySide | 'none'>>({});
   const [draggingRow, setDraggingRow] = useState<InanduGridRow | undefined>(undefined);
   const [expandedTreeRows, setExpandedTreeRows] = useState<Set<InanduGridRow>>(new Set());
   const [expandedRows, setExpandedRows] = useState<Set<InanduGridRow>>(new Set());
@@ -828,7 +829,24 @@ export function useInanduGrid({
   }
 
   /**
-   * The `left` offset (px) a `pinned: 'left'` column's `<th>`/`<td>` needs: the select-checkbox
+   * `field`'s current pin side, considering any runtime override (`setColumnPinned()`) — an
+   * override if one was ever set for this field, else its own declared `pinned`. `undefined` means
+   * not pinned. Same semantics as grid-angular's `columnPinnedSide`.
+   */
+  function columnPinnedSide(field: string): InanduColumnStickySide | undefined {
+    const override = pinnedOverrides[field];
+    if (override === 'left' || override === 'right') return override;
+    if (override === 'none') return undefined;
+    return orderedColumns.find(column => column.field === field)?.pinned;
+  }
+
+  /** Pins `field` to `side` at runtime, or un-pins it when `side` is `undefined` — independent of that column's own declared `pinned`. See `columnPinnedSide`. Same semantics as grid-angular's `setColumnPinned`. */
+  function setColumnPinned(field: string, side: InanduColumnStickySide | undefined): void {
+    setPinnedOverrides(overrides => ({ ...overrides, [field]: side ?? 'none' }));
+  }
+
+  /**
+   * The `left` offset (px) a left-pinned column's `<th>`/`<td>` needs: the select-checkbox
    * column's width (always sticky-left, when rendered) plus every *other* left-pinned column's
    * `effectiveWidth` that renders before this one in `visibleColumns`. Same semantics as
    * grid-angular's `stickyOffset`.
@@ -837,12 +855,12 @@ export function useInanduGrid({
     let offset = selectable ? SELECT_COLUMN_WIDTH : 0;
     for (const other of visibleColumns) {
       if (other.field === field) break;
-      if (other.pinned === 'left') offset += effectiveWidth(other.field);
+      if (columnPinnedSide(other.field) === 'left') offset += effectiveWidth(other.field);
     }
     return offset;
   }
 
-  /** The `right` offset (px) a `pinned: 'right'` column needs — the mirror image of `stickyOffset`, stacking from the table's right edge inward. Same semantics as grid-angular's `stickyOffsetRight`. */
+  /** The `right` offset (px) a right-pinned column needs — the mirror image of `stickyOffset`, stacking from the table's right edge inward. Same semantics as grid-angular's `stickyOffsetRight`. */
   function stickyOffsetRight(field: string): number {
     let offset = 0;
     let seen = false;
@@ -851,7 +869,7 @@ export function useInanduGrid({
         seen = true;
         continue;
       }
-      if (seen && other.pinned === 'right') offset += effectiveWidth(other.field);
+      if (seen && columnPinnedSide(other.field) === 'right') offset += effectiveWidth(other.field);
     }
     return offset;
   }
@@ -860,6 +878,8 @@ export function useInanduGrid({
     visibleColumns,
     stickyOffset,
     stickyOffsetRight,
+    columnPinnedSide,
+    setColumnPinned,
     hideableColumns,
     isColumnHidden,
     toggleColumnVisibility,
