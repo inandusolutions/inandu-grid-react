@@ -31,7 +31,8 @@ CSV/Excel/PDF export and i18n, with a deliberately small dependency footprint.
 
 ## See it
 
-Grouping and live free-text search — running in the [demo](https://inandusolutions.github.io/inandu-grid-react/).
+Grouping and live free-text search — running in the [demo](https://inandusolutions.github.io/inandu-grid-react/),
+which also has tabs for inline editing and tree data.
 
 [![grouping a column live in the demo grid](docs/gifs/grouping.gif)](https://inandusolutions.github.io/inandu-grid-react/)
 

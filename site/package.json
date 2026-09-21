@@ -1,0 +1,23 @@
+{
+  "name": "inandu-grid-react-site",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The GitHub Pages landing/demo site for @inandu-solutions/grid-react. Not published; installs the package from npm like any real consumer.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@inandu-solutions/grid-react": "^0.1.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.0"
+  }
+}

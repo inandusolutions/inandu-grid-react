@@ -1,7 +1,7 @@
 name: Pages
 
-# Builds the StackBlitz example (a small self-contained demo installing the published npm
-# package) and deploys it to GitHub Pages.
+# Builds site/ (a small landing/demo page installing the published npm package, mirroring
+# grid-angular's own GitHub Pages layout) and deploys it to GitHub Pages.
 #   https://inandusolutions.github.io/inandu-grid-react/ -> the live demo
 #
 # Pages "Source" must be set to "GitHub Actions" (not "Deploy from a branch").
@@ -33,20 +33,20 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: examples/stackblitz/package-lock.json
+          cache-dependency-path: site/package-lock.json
 
-      - name: Install the demo's dependencies
-        working-directory: examples/stackblitz
+      - name: Install the site's dependencies
+        working-directory: site
         run: npm ci
 
-      - name: Build the demo
-        working-directory: examples/stackblitz
+      - name: Build the site
+        working-directory: site
         run: npx vite build --base=/inandu-grid-react/
 
       - name: Assemble the site
         run: |
           mkdir _site
-          cp -r examples/stackblitz/dist/. _site/
+          cp -r site/dist/. _site/
           cp _site/index.html _site/404.html   # SPA fallback
 
       - uses: actions/configure-pages@v6
