@@ -1,0 +1,22 @@
+{
+  "name": "inandu-grid-react-stackblitz-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Minimal React app using @inandu-solutions/grid-react — the StackBlitz playground. Imports straight from the library's source (not yet published to npm), so it always tracks the repo it lives in.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.0"
+  }
+}

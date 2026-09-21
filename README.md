@@ -35,6 +35,9 @@ and doesn't cover.
   depends on this package the same way grid-pro depends on grid-angular.
 - **Package:** will ship as [`@inandu-solutions/grid-react`](https://www.npmjs.com/package/@inandu-solutions/grid-react)
   (MIT) — npm publishing is deferred until the API stabilizes.
+- **⚡ StackBlitz:** [a minimal editable example](https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz) —
+  the grid in a bare React app; edit `src/App.tsx` and it updates live ([source](examples/stackblitz)).
+  Imports straight from this repo's source (not npm — the package isn't published yet).
 
 ## Development
 
