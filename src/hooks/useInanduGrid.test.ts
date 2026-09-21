@@ -9,6 +9,16 @@ const columns = [
 
 const rows = [{ name: 'Ada', age: 30 }];
 
+describe('useInanduGrid: allColumns', () => {
+  it('includes hidden columns, unlike visibleColumns', () => {
+    const { result } = renderHook(() => useInanduGrid({ rows, columns }));
+    act(() => result.current.toggleColumnVisibility('age'));
+
+    expect(result.current.visibleColumns.map(c => c.field)).toEqual(['name']);
+    expect(result.current.allColumns.map(c => c.field)).toEqual(['name', 'age']);
+  });
+});
+
 describe('useInanduGrid: runtime column pin/unpin', () => {
   it('columnPinnedSide falls back to the column\'s own declared pinned when no override was set', () => {
     const pinned = [{ ...columns[0], pinned: 'left' as const }, columns[1]];

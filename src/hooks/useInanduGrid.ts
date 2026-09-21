@@ -876,6 +876,8 @@ export function useInanduGrid({
 
   return {
     visibleColumns,
+    /** Every column in current drag-reorder order, hidden ones included — same as grid-angular's `displayColumns()`. Most rendering should use `visibleColumns` instead; this is for callers (like a saved-view restore) that need to address a currently-hidden column too. */
+    allColumns: orderedColumns,
     stickyOffset,
     stickyOffsetRight,
     columnPinnedSide,
