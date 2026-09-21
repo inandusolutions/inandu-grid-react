@@ -61,6 +61,9 @@ covers:
 - Custom cell / header / edit-control rendering per column (`renderCell` / `renderHeader` /
   `renderEditor`) — drop in your own component in place of the built-in formatted text, header
   label, or edit-mode input, without losing sorting, resizing, or validation
+- Excel-style cell range selection (`cellRangeSelection`, `multiRange`) — click-and-drag or
+  shift-click across cells to select a rectangular block; `Ctrl+C` copies the whole range as TSV
+  when `clipboard` is also on
 - Row virtualization (`virtualScroll`) for large datasets
 
 Two things work slightly differently from grid-angular because they need a real browser layout

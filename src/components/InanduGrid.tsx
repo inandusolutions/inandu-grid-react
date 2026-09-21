@@ -19,6 +19,33 @@ import { createTranslator, InanduGridMessageKey } from '../utils/translate';
 
 type Translator = (key: InanduGridMessageKey, params?: Record<string, string | number>) => string;
 
+/** The currently selected cell range — see `InanduGridProps.cellRangeSelection`/`onCellRangeChange`. `rows`/`fields` are the full row objects and field names spanning the selected rectangle, in `visibleRows`/`visibleColumns` order. */
+export interface InanduGridCellRangeSelection {
+  rows: InanduGridRow[];
+  fields: string[];
+}
+
+/** An inclusive rectangle in `visibleRows`/`visibleColumns` coordinates. */
+interface RangeRect {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+}
+
+function normalizeRange(anchor: { row: number; col: number }, focus: { row: number; col: number }): RangeRect {
+  return {
+    minRow: Math.min(anchor.row, focus.row),
+    maxRow: Math.max(anchor.row, focus.row),
+    minCol: Math.min(anchor.col, focus.col),
+    maxCol: Math.max(anchor.col, focus.col),
+  };
+}
+
+function isRectHit(rect: RangeRect, rowIndex: number, colIndex: number): boolean {
+  return rowIndex >= rect.minRow && rowIndex <= rect.maxRow && colIndex >= rect.minCol && colIndex <= rect.maxCol;
+}
+
 export interface InanduGridProps {
   rows: InanduGridRow[];
   columns: InanduGridColumn[];
@@ -56,6 +83,28 @@ export interface InanduGridProps {
   clipboard?: boolean;
   /** Called with every parsed cell update from a `Ctrl+V`. The grid never mutates `rows` itself. */
   onCellsPaste?: (updates: InanduGridCellPaste[]) => void;
+  /**
+   * Opt-in Excel-style range selection — click-and-drag (or shift-click, without dragging) across
+   * cells in the flat, non-grouped, non-tree, non-virtualized render path (same restriction
+   * `rowReorder`/`clipboard` already document) selects a rectangular block of cells, highlighted via
+   * `.inandu-cell-range-selected`. Off by default. When `clipboard` is *also* on, `Ctrl+C` copies
+   * the *entire* selected range as TSV instead of just the focused cell — otherwise this is purely a
+   * selection/highlight feature with no built-in side effect; `onCellRangeChange`/
+   * `onCellRangesChange` are how a consumer observes what's currently selected.
+   */
+  cellRangeSelection?: boolean;
+  /**
+   * Lets a Ctrl/Cmd-drag (or Ctrl/Cmd-click) *add* another rectangle to the selection instead of
+   * replacing it, the same convention spreadsheets use. A plain click still resets to one
+   * rectangle. Only meaningful with `cellRangeSelection` on. `onCellRangeChange` keeps reporting the
+   * *active* (last) rectangle; `onCellRangesChange` reports the whole list. `Ctrl+C` copies only the
+   * active rectangle. Default: false.
+   */
+  multiRange?: boolean;
+  /** Called with the selected range's rows/fields on every change, or `undefined` once cleared. With `multiRange` on this is the *active* (last) rectangle. */
+  onCellRangeChange?: (selection: InanduGridCellRangeSelection | undefined) => void;
+  /** Called with every selected rectangle (active one last), or `[]` once cleared — see `multiRange`. */
+  onCellRangesChange?: (selections: InanduGridCellRangeSelection[]) => void;
   /** Adds a "Columns" toolbar button + popup letting the user show/hide individual columns at runtime. Default: false. */
   columnToggle?: boolean;
   /** Adds a per-row drag handle to reorder rows. Default: false. Auto-disabled while grouped, same as grid-angular. */
@@ -135,6 +184,10 @@ export function InanduGrid({
   onRowsDelete,
   clipboard = false,
   onCellsPaste,
+  cellRangeSelection = false,
+  multiRange = false,
+  onCellRangeChange,
+  onCellRangesChange,
   columnToggle = false,
   rowReorder = false,
   onRowOrderChange,
@@ -277,6 +330,81 @@ export function InanduGrid({
     if (width > 0) setColumnWidth(column.field, Math.min(MAX_COLUMN_WIDTH, width));
   }
 
+  // ── Excel-style cell range selection (`cellRangeSelection`) ──
+  // Only meaningful in the flat, non-grouped, non-tree, non-virtualized render path — same
+  // restriction `rowReorder`/`clipboard` already document.
+  const hasCellRangeSelection = cellRangeSelection && !groupByField && !hasVirtualScroll && !hasTreeData;
+  // The cell a range drag/shift-click started from — fixed for the duration of one selection gesture.
+  const [rangeAnchor, setRangeAnchor] = useState<{ row: number; col: number } | undefined>(undefined);
+  // The cell a range drag/shift-click currently extends to — this is the corner that moves as the gesture continues.
+  const [rangeFocus, setRangeFocus] = useState<{ row: number; col: number } | undefined>(undefined);
+  // Rectangles frozen by an earlier Ctrl-drag while `multiRange` is on — the active one is `selectedRange` below.
+  const [committedRanges, setCommittedRanges] = useState<RangeRect[]>([]);
+  // Whether a mouse-drag range selection is in progress — a ref (not state) since only event handlers read it.
+  const isSelectingRangeRef = useRef(false);
+
+  const selectedRange: RangeRect | undefined = rangeAnchor && rangeFocus ? normalizeRange(rangeAnchor, rangeFocus) : undefined;
+  const allRanges = selectedRange ? [...committedRanges, selectedRange] : committedRanges;
+
+  function isCellInRange(rowIndex: number, colIndex: number): boolean {
+    return allRanges.some(r => isRectHit(r, rowIndex, colIndex));
+  }
+
+  function rangeToSelection(r: RangeRect): InanduGridCellRangeSelection {
+    return {
+      rows: visibleRows.slice(r.minRow, r.maxRow + 1),
+      fields: visibleColumns.slice(r.minCol, r.maxCol + 1).map(column => column.field),
+    };
+  }
+
+  // Reports the active range and the full range list on every change, including the transition to
+  // "nothing selected" — a React-idiomatic stand-in for grid-angular's per-gesture `emit` calls.
+  useEffect(() => {
+    if (!hasCellRangeSelection) return;
+    onCellRangeChange?.(selectedRange ? rangeToSelection(selectedRange) : undefined);
+    onCellRangesChange?.(allRanges.map(rangeToSelection));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasCellRangeSelection, rangeAnchor, rangeFocus, committedRanges, visibleRows, visibleColumns]);
+
+  /** Starts a new range selection gesture — a plain click resets to this cell; shift-click extends the *existing* anchor; Ctrl/Cmd-click (with `multiRange`) freezes the current rectangle and starts another. */
+  function onCellRangeMouseDown(event: ReactMouseEvent, rowIndex: number, colIndex: number) {
+    if (event.button !== 0) return;
+    isSelectingRangeRef.current = true;
+    const additive = multiRange && (event.ctrlKey || event.metaKey) && !event.shiftKey;
+    if (additive) {
+      if (selectedRange) setCommittedRanges(ranges => [...ranges, selectedRange]);
+      setRangeAnchor({ row: rowIndex, col: colIndex });
+    } else if (!event.shiftKey || !rangeAnchor) {
+      setCommittedRanges([]);
+      setRangeAnchor({ row: rowIndex, col: colIndex });
+    }
+    setRangeFocus({ row: rowIndex, col: colIndex });
+  }
+
+  /** Extends the in-progress range to `(rowIndex, colIndex)` — a no-op while no drag is active, so merely hovering cells never starts or changes a selection. */
+  function onCellRangeMouseEnter(rowIndex: number, colIndex: number) {
+    if (!isSelectingRangeRef.current) return;
+    setRangeFocus({ row: rowIndex, col: colIndex });
+  }
+
+  // Ends the in-progress drag — bound at the document level (not the cell) since the mouse button
+  // can be released outside any cell and the drag should still stop.
+  useEffect(() => {
+    if (!hasCellRangeSelection) return;
+    const onDocumentMouseUp = () => {
+      isSelectingRangeRef.current = false;
+    };
+    document.addEventListener('mouseup', onDocumentMouseUp);
+    return () => document.removeEventListener('mouseup', onDocumentMouseUp);
+  }, [hasCellRangeSelection]);
+
+  /** The full selected range formatted as TSV (one line per row, tab-separated columns) — what `Ctrl+C` copies when a genuine (more-than-one-cell) range is active. */
+  function selectedRangeText(r: RangeRect): string {
+    const rows = visibleRows.slice(r.minRow, r.maxRow + 1);
+    const rangeColumns = visibleColumns.slice(r.minCol, r.maxCol + 1);
+    return rows.map(row => rangeColumns.map(column => formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)).join('\t')).join('\n');
+  }
+
   const aggregateColumns = visibleColumns.filter(column => column.aggregate);
   const groupableColumns = visibleColumns.filter(column => column.groupable !== false);
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
@@ -369,7 +497,11 @@ export function InanduGrid({
 
     event.preventDefault();
     if (key === 'c') {
-      navigator.clipboard?.writeText(copyCellText(rowIndex, field))?.catch(() => undefined);
+      const rangeText =
+        hasCellRangeSelection && selectedRange && (selectedRange.minRow !== selectedRange.maxRow || selectedRange.minCol !== selectedRange.maxCol)
+          ? selectedRangeText(selectedRange)
+          : undefined;
+      navigator.clipboard?.writeText(rangeText ?? copyCellText(rowIndex, field))?.catch(() => undefined);
     } else {
       navigator.clipboard?.readText()?.then(text => pasteAt(rowIndex, field, text)).catch(() => undefined);
     }
@@ -397,6 +529,10 @@ export function InanduGrid({
     fieldErrors,
     isValidating,
     setRowDraftValue,
+    cellRangeSelection: hasCellRangeSelection,
+    isCellInRange,
+    onCellRangeMouseDown,
+    onCellRangeMouseEnter,
   };
 
   return (
@@ -662,6 +798,11 @@ interface DataRowProps {
   setRowDraftValue: (field: string, value: unknown) => void;
   /** Adds the `tabIndex` `handleTableKeyDown` resolves a Ctrl+C/Ctrl+V onto — `data-row-index`/`data-field` are always present (flat, non-grouped render path only), same as grid-angular. */
   clipboard?: boolean;
+  /** Marks cells `.inandu-cell-range-selected` and wires the drag/shift-click gesture — only in the flat, non-grouped, non-tree, non-virtualized render path, same restriction grid-angular's `cellRangeSelection` has. */
+  cellRangeSelection?: boolean;
+  isCellInRange?: (rowIndex: number, colIndex: number) => boolean;
+  onCellRangeMouseDown?: (event: ReactMouseEvent, rowIndex: number, colIndex: number) => void;
+  onCellRangeMouseEnter?: (rowIndex: number, colIndex: number) => void;
   /** Adds a leading drag-handle `<td>` and wires the whole row for drag-and-drop reordering — only in the flat, non-grouped render path, same restriction grid-angular's `rowReorder` has. */
   hasRowDragHandle?: boolean;
   isDragOverRow?: boolean;
@@ -704,6 +845,10 @@ function DataRow({
   isValidating,
   setRowDraftValue,
   clipboard = false,
+  cellRangeSelection = false,
+  isCellInRange,
+  onCellRangeMouseDown,
+  onCellRangeMouseEnter,
   hasRowDragHandle = false,
   isDragOverRow = false,
   onRowDragStart,
@@ -775,8 +920,16 @@ function DataRow({
             <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
           </td>
         )}
-        {columns.map(column => (
-          <td key={column.field} style={columnStyle(column)} data-field={column.field} tabIndex={clipboard ? 0 : undefined}>
+        {columns.map((column, colIndex) => (
+          <td
+            key={column.field}
+            style={columnStyle(column)}
+            data-field={column.field}
+            tabIndex={clipboard ? 0 : undefined}
+            className={cellRangeSelection && isCellInRange?.(rowIndex, colIndex) ? 'inandu-cell-range-selected' : undefined}
+            onMouseDown={cellRangeSelection ? e => onCellRangeMouseDown?.(e, rowIndex, colIndex) : undefined}
+            onMouseEnter={cellRangeSelection ? () => onCellRangeMouseEnter?.(rowIndex, colIndex) : undefined}
+          >
             {editing && column.editable ? (
               column.renderEditor ? (
                 column.renderEditor({

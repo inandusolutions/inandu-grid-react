@@ -337,6 +337,14 @@
   color: var(--ig-danger);
 }
 
+/* ── cell range selection ────────────────────────────────────────────── */
+
+.inandu-cell-range-selected {
+  background: color-mix(in srgb, var(--ig-accent) 16%, transparent);
+  outline: 1px solid var(--ig-accent);
+  outline-offset: -1px;
+}
+
 /* ── pagination ──────────────────────────────────────────────────────── */
 
 .inandu-grid-pagination {

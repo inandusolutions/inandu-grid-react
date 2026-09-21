@@ -1,5 +1,5 @@
 export { InanduGrid } from './components/InanduGrid';
-export type { InanduGridProps } from './components/InanduGrid';
+export type { InanduGridProps, InanduGridCellRangeSelection } from './components/InanduGrid';
 
 export { useInanduGrid } from './hooks/useInanduGrid';
 export type {

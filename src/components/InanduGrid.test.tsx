@@ -689,3 +689,94 @@ describe('InanduGrid: custom render slots', () => {
     expect(screen.queryByLabelText('Edit Name')).not.toBeInTheDocument();
   });
 });
+
+describe('InanduGrid: cell range selection', () => {
+  it('does not mark any cell selected without cellRangeSelection', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    expect(container.querySelector('.inandu-cell-range-selected')).not.toBeInTheDocument();
+  });
+
+  it('selects a single cell on mousedown', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    const selected = container.querySelectorAll('.inandu-cell-range-selected');
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toHaveTextContent('Beatriz');
+  });
+
+  it('extends the rectangle across a mousedown + mouseenter drag', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 }); // row 0, col 0
+    fireEvent.mouseEnter(screen.getByText('30')); // row 1, col 1 (Ana's age)
+    // The 2x2 rectangle between (0,0) and (1,1) is every cell in this 2-row/2-column grid.
+    expect(container.querySelectorAll('.inandu-cell-range-selected')).toHaveLength(4);
+  });
+
+  it('reports the selected range via onCellRangeChange', () => {
+    const onCellRangeChange = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={onCellRangeChange} />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    fireEvent.mouseEnter(screen.getByText('Ana'));
+    expect(onCellRangeChange).toHaveBeenLastCalledWith({ rows: [rows[0], rows[1]], fields: ['name'] });
+  });
+
+  it('reports undefined once the selection has nothing (initial render)', () => {
+    const onCellRangeChange = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={onCellRangeChange} />);
+    expect(onCellRangeChange).toHaveBeenCalledWith(undefined);
+  });
+
+  it('shift-click extends the existing anchor without a drag', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 }); // anchor: row 0, col 0
+    fireEvent.mouseUp(document); // ends the drag gesture — the anchor itself must survive this
+    fireEvent.mouseDown(screen.getByText('30'), { button: 0, shiftKey: true }); // row 1, col 1
+    // Shift-click extends the original anchor (0,0) rather than resetting it to (1,1) alone.
+    expect(container.querySelectorAll('.inandu-cell-range-selected')).toHaveLength(4);
+  });
+
+  it('a plain click resets the selection to the new cell', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    fireEvent.mouseEnter(screen.getByText('Ana'));
+    fireEvent.mouseUp(document);
+    fireEvent.mouseDown(screen.getByText('41'), { button: 0 });
+    const selected = container.querySelectorAll('.inandu-cell-range-selected');
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toHaveTextContent('41');
+  });
+
+  it('hovering cells without a drag in progress does not start a selection', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection />);
+    fireEvent.mouseEnter(screen.getByText('Beatriz'));
+    expect(container.querySelector('.inandu-cell-range-selected')).not.toBeInTheDocument();
+  });
+
+  it('Ctrl+C copies the whole selected range as TSV when clipboard is also on', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<InanduGrid rows={rows} columns={columns} clipboard cellRangeSelection />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    fireEvent.mouseEnter(screen.getByText('30'));
+    fireEvent.keyDown(screen.getByText('Beatriz'), { key: 'c', ctrlKey: true });
+    expect(writeText).toHaveBeenCalledWith('Beatriz\t41\nAna\t30');
+  });
+
+  it('Ctrl+C still copies just the focused cell when only one cell is selected', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<InanduGrid rows={rows} columns={columns} clipboard cellRangeSelection />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    fireEvent.keyDown(screen.getByText('Beatriz'), { key: 'c', ctrlKey: true });
+    expect(writeText).toHaveBeenCalledWith('Beatriz');
+  });
+
+  it('is disabled while the grid is grouped', () => {
+    const { container } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'name' } });
+    // Grouped rows render through RowGroup, which never wires the range mousedown/mouseenter handlers.
+    fireEvent.mouseDown(container.querySelector('td[data-field="name"]')!, { button: 0 });
+    expect(container.querySelector('.inandu-cell-range-selected')).not.toBeInTheDocument();
+  });
+});
