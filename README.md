@@ -2,10 +2,14 @@
 
 The React port of [`@inandu-solutions/grid-angular`](https://github.com/inandusolutions/inandu-grid) —
 a standalone data grid: sorting, filtering, grouping, pagination, virtual scroll, inline editing,
-CSV/Excel/PDF export, i18n and theming, with a deliberately small dependency footprint.
+CSV/Excel/PDF export and i18n, with a deliberately small dependency footprint.
 
-**Status: early work in progress, not yet published to npm — but feature-complete with
-grid-angular.** The framework-agnostic core (sorting, filtering, aggregation, export, i18n) is
+[![license](https://img.shields.io/badge/license-MIT-0e7c74.svg)](LICENSE)
+![React](https://img.shields.io/badge/React-18%20%7C%2019-61dafb)
+[![Open in StackBlitz](https://img.shields.io/badge/StackBlitz-open%20example-1389FD?logo=stackblitz&logoColor=white)](https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz)
+
+**Feature-complete with grid-angular — not yet published to npm** (see the "Package" bullet
+below). The framework-agnostic core (sorting, filtering, aggregation, export, i18n) is
 ported from grid-angular's
 [`core/`](https://github.com/inandusolutions/inandu-grid/tree/main/projects/inandu-grid/src/lib/core)
 folder and kept in sync by hand across the two repos. The React-specific layer — the `<InanduGrid>`
@@ -31,8 +35,8 @@ and doesn't cover.
   original, feature-complete, MIT-licensed grid. Start there if you need something production-ready
   today.
 - **Commercial add-ons for React:** `@inandu-solutions/grid-pro-react` *(private, paid, not released
-  yet)* — the React port of [`@inandu-solutions/grid-pro`](https://github.com/inandusolutions/inandu-grid#readme),
-  depends on this package the same way grid-pro depends on grid-angular.
+  yet)* — the React port of `@inandu-solutions/grid-pro`, depends on this package the same way
+  grid-pro depends on grid-angular.
 - **Package:** will ship as [`@inandu-solutions/grid-react`](https://www.npmjs.com/package/@inandu-solutions/grid-react)
   (MIT) — npm publishing is deferred until the API stabilizes.
 - **⚡ StackBlitz:** [a minimal editable example](https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz) —
