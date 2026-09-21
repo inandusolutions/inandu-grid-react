@@ -45,7 +45,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/inandu-grid-react.js",
       "require": "./dist/inandu-grid-react.cjs"
-    }
+    },
+    "./style.css": "./dist/style.css"
   },
   "files": [
     "dist"
@@ -60,7 +61,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node -e \"require('fs').copyFileSync('src/styles/inandu-grid.css','dist/style.css')\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

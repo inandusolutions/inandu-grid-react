@@ -657,7 +657,7 @@ interface DataRowProps {
   fieldErrors: Record<string, string>;
   isValidating: boolean;
   setRowDraftValue: (field: string, value: unknown) => void;
-  /** Adds the `data-row-index`/`data-field`/`tabIndex` attributes `handleTableKeyDown` resolves a Ctrl+C/Ctrl+V onto — only in the flat, non-grouped render path, same restriction grid-angular's clipboard has. */
+  /** Adds the `tabIndex` `handleTableKeyDown` resolves a Ctrl+C/Ctrl+V onto — `data-row-index`/`data-field` are always present (flat, non-grouped render path only), same as grid-angular. */
   clipboard?: boolean;
   /** Adds a leading drag-handle `<td>` and wires the whole row for drag-and-drop reordering — only in the flat, non-grouped render path, same restriction grid-angular's `rowReorder` has. */
   hasRowDragHandle?: boolean;
@@ -719,7 +719,7 @@ function DataRow({
   return (
     <>
       <tr
-        data-row-index={clipboard ? rowIndex : undefined}
+        data-row-index={rowIndex}
         className={isDragOverRow ? 'inandu-drag-over' : undefined}
         onDragOver={
           hasRowDragHandle

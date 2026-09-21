@@ -1,0 +1,350 @@
+/**
+ * Optional default styling for <InanduGrid>. Every selector below targets a className the
+ * component already renders (see InanduGrid.tsx) — nothing here is required for the grid to
+ * function; skip this file entirely and bring your own CSS if you'd rather start from a blank
+ * table. Import once, anywhere in your app:
+ *
+ *   import '@inandu-solutions/grid-react/style.css';
+ *
+ * Colors/spacing are CSS custom properties on .inandu-grid-react, so overriding the look is just
+ * redeclaring them on your own selector — no !important, no rebuilding the package.
+ */
+
+.inandu-grid-react {
+  --ig-accent: #1a8fae;
+  --ig-accent-ink: #ffffff;
+  --ig-ink: #1b1f24;
+  --ig-muted: #5c6470;
+  --ig-border: #e2e5e9;
+  --ig-header-bg: #f6f7f8;
+  --ig-row-bg: #ffffff;
+  --ig-row-alt-bg: #fafbfc;
+  --ig-row-hover-bg: #eef6f8;
+  --ig-row-selected-bg: #e3f2f6;
+  --ig-focus-ring: #1a8fae;
+  --ig-danger: #c0392b;
+  --ig-radius: 6px;
+  --ig-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  font-family: var(--ig-font);
+  color: var(--ig-ink);
+  font-size: 0.92rem;
+}
+
+.inandu-grid-react * {
+  box-sizing: border-box;
+}
+
+.inandu-grid-react button {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ig-ink);
+  background: #fff;
+  border: 1px solid var(--ig-border);
+  border-radius: var(--ig-radius);
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+.inandu-grid-react button:hover:not(:disabled) {
+  border-color: var(--ig-accent);
+  color: var(--ig-accent);
+}
+
+.inandu-grid-react button:disabled {
+  color: var(--ig-muted);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.inandu-grid-react input[type='text'],
+.inandu-grid-react input[type='number'],
+.inandu-grid-react input[type='date'],
+.inandu-grid-react select {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--ig-ink);
+  background: #fff;
+  border: 1px solid var(--ig-border);
+  border-radius: var(--ig-radius);
+  padding: 0.3rem 0.5rem;
+}
+
+.inandu-grid-react input:focus-visible,
+.inandu-grid-react select:focus-visible,
+.inandu-grid-react button:focus-visible {
+  outline: 2px solid var(--ig-focus-ring);
+  outline-offset: 1px;
+}
+
+/* ── search + toolbar ────────────────────────────────────────────────── */
+
+.inandu-grid-search {
+  margin-bottom: 0.6rem;
+}
+
+.inandu-grid-search input {
+  width: 100%;
+  max-width: 320px;
+}
+
+.inandu-grid-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.inandu-grid-column-toggle {
+  position: relative;
+}
+
+.inandu-grid-column-toggle summary {
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--ig-ink);
+  background: #fff;
+  border: 1px solid var(--ig-border);
+  border-radius: var(--ig-radius);
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+}
+
+.inandu-grid-column-toggle summary::-webkit-details-marker {
+  display: none;
+}
+
+.inandu-grid-column-toggle[open] summary {
+  border-color: var(--ig-accent);
+  color: var(--ig-accent);
+}
+
+.inandu-grid-column-toggle ul {
+  position: absolute;
+  z-index: 20;
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0.4rem;
+  min-width: 12rem;
+  background: #fff;
+  border: 1px solid var(--ig-border);
+  border-radius: var(--ig-radius);
+  box-shadow: 0 8px 24px -12px rgba(27, 31, 36, 0.3);
+}
+
+.inandu-grid-column-toggle li {
+  padding: 0.2rem 0.3rem;
+}
+
+.inandu-grid-column-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.inandu-grid-group-by {
+  margin-bottom: 0.6rem;
+  color: var(--ig-muted);
+  font-size: 0.85rem;
+}
+
+/* ── the table itself ────────────────────────────────────────────────── */
+
+.inandu-grid-viewport {
+  border: 1px solid var(--ig-border);
+  border-radius: var(--ig-radius);
+}
+
+.inandu-grid {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--ig-border);
+  border-radius: var(--ig-radius);
+  overflow: hidden;
+}
+
+.inandu-grid th,
+.inandu-grid td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--ig-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.inandu-grid thead th {
+  background: var(--ig-header-bg);
+  font-weight: 600;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.inandu-grid thead th.inandu-drag-over {
+  background: var(--ig-row-selected-bg);
+  box-shadow: inset 2px 0 0 var(--ig-accent);
+}
+
+.inandu-grid-sort-priority {
+  margin-inline-start: 0.15rem;
+  font-size: 0.65rem;
+  color: var(--ig-accent);
+}
+
+.inandu-grid-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.inandu-grid-resize-handle:hover {
+  background: var(--ig-accent);
+  opacity: 0.35;
+}
+
+.inandu-grid-filter-row th {
+  background: var(--ig-row-alt-bg);
+  padding: 0.35rem 0.5rem;
+  cursor: default;
+}
+
+.inandu-grid-filter-row input,
+.inandu-grid-filter-row select {
+  width: 100%;
+}
+
+.inandu-grid-filter-range {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.inandu-grid-filter-range input {
+  min-width: 0;
+}
+
+.inandu-grid tbody tr {
+  background: var(--ig-row-bg);
+}
+
+.inandu-grid tbody tr:nth-child(even) {
+  background: var(--ig-row-alt-bg);
+}
+
+.inandu-grid tbody tr:hover {
+  background: var(--ig-row-hover-bg);
+}
+
+.inandu-grid tbody tr[aria-selected='true'] {
+  background: var(--ig-row-selected-bg);
+}
+
+.inandu-grid-totals-row td {
+  font-weight: 600;
+  border-top: 2px solid var(--ig-border);
+  background: var(--ig-header-bg);
+}
+
+/* ── row actions / drag / detail ─────────────────────────────────────── */
+
+.inandu-grid-row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.inandu-grid-row-actions button {
+  margin-inline-start: 0.3rem;
+}
+
+.inandu-grid-row-drag-handle,
+.inandu-grid-detail-toggle {
+  background: none;
+  border: none;
+  padding: 0.1rem 0.3rem;
+  cursor: grab;
+  color: var(--ig-muted);
+}
+
+.inandu-grid-detail-toggle {
+  cursor: pointer;
+}
+
+.inandu-grid-detail-row td {
+  background: var(--ig-row-alt-bg);
+  padding: 0.75rem 1rem;
+}
+
+.inandu-grid-new-row td {
+  background: var(--ig-row-selected-bg);
+}
+
+/* ── grouping ────────────────────────────────────────────────────────── */
+
+.inandu-grid-group-row td {
+  background: var(--ig-header-bg);
+  font-weight: 600;
+}
+
+.inandu-grid-group-aggregates {
+  margin-inline-start: 0.6rem;
+  font-weight: 400;
+  color: var(--ig-muted);
+  font-size: 0.85rem;
+}
+
+/* ── tree data ───────────────────────────────────────────────────────── */
+
+.inandu-grid-tree-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.inandu-grid-tree-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  width: 1.1rem;
+  cursor: pointer;
+  color: var(--ig-muted);
+}
+
+.inandu-grid-tree-toggle-spacer {
+  display: inline-block;
+  width: 1.1rem;
+}
+
+/* ── inline editing ──────────────────────────────────────────────────── */
+
+.inandu-grid-edit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.inandu-grid-edit-cell input,
+.inandu-grid-edit-cell select {
+  width: 100%;
+}
+
+.inandu-grid-field-error {
+  font-size: 0.75rem;
+  color: var(--ig-danger);
+}
+
+/* ── pagination ──────────────────────────────────────────────────────── */
+
+.inandu-grid-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+  color: var(--ig-muted);
+  font-size: 0.85rem;
+}

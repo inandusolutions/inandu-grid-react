@@ -71,6 +71,7 @@ and doesn't cover.
 
 ```tsx
 import { InanduGrid, useInanduGrid } from '@inandu-solutions/grid-react';
+import '@inandu-solutions/grid-react/style.css'; // optional default styling — skip it and bring your own
 
 // Component: batteries-included table.
 <InanduGrid rows={rows} columns={columns} />;
