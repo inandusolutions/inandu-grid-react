@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { InanduGrid, InanduGridColumn, InanduGridRow } from '../../../src';
+import { InanduGrid, InanduGridColumn, InanduGridRow } from '@inandu-solutions/grid-react';
 
 const columns: InanduGridColumn[] = [
   { field: 'name', headerText: 'Name' },

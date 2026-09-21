@@ -3,10 +3,7 @@
 A minimal React app rendering `<InanduGrid>` with sorting, per-column filters, grouping, selection,
 the column-toggle popup, aggregates/totals, and the export toolbar.
 
-**`@inandu-solutions/grid-react` isn't published to npm yet**, so unlike the Angular example this
-one imports straight from the library's own source (`../../../src`) instead of installing a
-package — it always tracks whatever's currently in this repo. Once the package ships, this will
-switch to a normal npm dependency like the Angular example already has.
+Installs `@inandu-solutions/grid-react` from npm, same as any real consumer of the library would.
 
 **Open it live (no account needed):**
 <https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz>

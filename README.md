@@ -43,9 +43,8 @@ and doesn't cover.
 - **Package:** [`@inandu-solutions/grid-react`](https://www.npmjs.com/package/@inandu-solutions/grid-react)
   (MIT) — `0.x` while the API settles; expect breaking changes between minors until `1.0.0`.
 - **⚡ StackBlitz:** [a minimal editable example](https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz) —
-  the grid in a bare React app; edit `src/App.tsx` and it updates live ([source](examples/stackblitz)).
-  Imports straight from this repo's source rather than the published package, so it always tracks
-  what's currently on `main`.
+  the grid in a bare React app installing `@inandu-solutions/grid-react` from npm; edit `src/App.tsx`
+  and it updates live ([source](examples/stackblitz)).
 
 ## Development
 
