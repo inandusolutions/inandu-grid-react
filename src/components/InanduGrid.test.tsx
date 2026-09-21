@@ -507,4 +507,61 @@ describe('InanduGrid', () => {
 
     expect(screen.queryAllByLabelText('Expand row details')).toHaveLength(0);
   });
+
+  describe('virtualScroll', () => {
+    const manyRows = Array.from({ length: 50 }, (_, i) => ({ name: `Row${i}` }));
+    const nameColumn = [{ field: 'name', headerText: 'Name' }];
+
+    it('mounts only the rows in view (plus overscan), not the full dataset', () => {
+      const { container } = render(
+        <InanduGrid rows={manyRows} columns={nameColumn} virtualScroll height={100} virtualRowHeight={20} overscan={1} />,
+      );
+
+      // height/rowHeight = 5 visible rows, +1 overscan => rows 0..5 (index 6 exclusive).
+      expect(screen.getByText('Row0')).toBeInTheDocument();
+      expect(screen.getByText('Row5')).toBeInTheDocument();
+      expect(screen.queryByText('Row6')).not.toBeInTheDocument();
+      expect(screen.queryByText('Row49')).not.toBeInTheDocument();
+
+      // A real scrollbar-sized bottom spacer stands in for the unmounted rows.
+      const viewport = container.querySelector('.inandu-grid-viewport')!;
+      const bottomSpacer = viewport.querySelector('tr[aria-hidden="true"]:last-of-type td') as HTMLElement;
+      expect(bottomSpacer.style.height).toBe(`${(50 - 6) * 20}px`);
+    });
+
+    it('shifts the mounted window when the viewport scrolls', () => {
+      const { container } = render(
+        <InanduGrid rows={manyRows} columns={nameColumn} virtualScroll height={100} virtualRowHeight={20} overscan={1} />,
+      );
+
+      const viewport = container.querySelector('.inandu-grid-viewport')!;
+      fireEvent.scroll(viewport, { target: { scrollTop: 200 } });
+
+      // floor(200/20)-1=9 .. ceil(300/20)+1=16 (exclusive) => rows 9..15.
+      expect(screen.queryByText('Row0')).not.toBeInTheDocument();
+      expect(screen.getByText('Row9')).toBeInTheDocument();
+      expect(screen.getByText('Row15')).toBeInTheDocument();
+      expect(screen.queryByText('Row16')).not.toBeInTheDocument();
+    });
+
+    it('bypasses pagination and disables the totals row, master-detail, and row drag-reorder', () => {
+      render(
+        <InanduGrid
+          rows={salesRows}
+          columns={salesColumns}
+          virtualScroll
+          pageSize={1}
+          renderDetail={() => <span>detail</span>}
+          rowReorder
+        />,
+      );
+
+      expect(screen.queryByText(/Page \d+ of \d+/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Amount Σ/)).not.toBeInTheDocument();
+      expect(screen.queryAllByLabelText('Expand row details')).toHaveLength(0);
+      expect(screen.queryAllByLabelText('Drag to reorder row')).toHaveLength(0);
+      // All 3 rows still present (unfiltered dataset, no virtualization-window edge case at this size).
+      expect(screen.getAllByRole('row')).toHaveLength(1 + 1 + salesRows.length); // header + filter-row + data rows
+    });
+  });
 });

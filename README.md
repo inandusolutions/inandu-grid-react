@@ -16,9 +16,12 @@ editing/creation/deletion with validation (required/min/max/pattern/custom/async
 Ctrl+C/Ctrl+V clipboard copy/paste, runtime column show/hide, sticky (pinned left/right) columns,
 column drag-reorder, column resize (drag a header's handle; no autosize/fit-to-content yet, it
 needs real layout measurement), row drag-reorder, tree data (`treeChildrenKey`, display + expand
-only — no inline editing/drag/clipboard on tree rows, same restriction as grid-angular), and
-master-detail (`renderDetail`). Virtualization is not ported yet — it needs real viewport
-measurement, which a unit-test environment can't meaningfully verify.
+only — no inline editing/drag/clipboard on tree rows, same restriction as grid-angular),
+master-detail (`renderDetail`), and row virtualization (`virtualScroll`) for large datasets — unlike
+grid-angular, this port doesn't auto-measure a rendered row's real height (that needs a real layout
+engine unit tests can't provide); pass `virtualRowHeight` explicitly instead. Column
+autosize/fit-to-content is the one thing still not ported, for the same real-layout-measurement
+reason.
 
 - **Angular version:** [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) — the
   original, feature-complete, MIT-licensed grid. Start there if you need something production-ready

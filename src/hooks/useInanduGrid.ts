@@ -134,6 +134,15 @@ export interface UseInanduGridOptions {
   treeDefaultExpanded?: 'none' | 'all' | number;
   /** Whether master-detail is on — the caller checks this itself (by passing a `renderDetail`), this only controls `toggleRowExpanded`'s accordion behavior. Off (any number of rows can be expanded at once) by default. */
   singleDetailExpand?: boolean;
+  /**
+   * Opt-in row virtualization for large datasets — bypasses pagination entirely (same as grouping),
+   * feeding the windowing logic the full sorted/filtered set instead. Auto-disables grouping,
+   * master-detail, tree data, row drag-reorder and clipboard, same restrictions grid-angular's
+   * `virtualScroll` has (there it also covers server-side infinite-scroll, which this port doesn't
+   * have). The actual DOM windowing (which rows are mounted, given a real scroll position) is the
+   * `<InanduGrid>` component's job, not this hook's — it has no way to observe scroll state itself.
+   */
+  virtualScroll?: boolean;
 }
 
 /**
@@ -160,6 +169,7 @@ export function useInanduGrid({
   treeChildrenKey,
   treeDefaultExpanded = 'none',
   singleDetailExpand = false,
+  virtualScroll = false,
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
@@ -368,8 +378,8 @@ export function useInanduGrid({
     [sortedFilteredRows, aggregateColumnConfigs],
   );
 
-  /** Tree mode is on, and grouping (its one incompatible render path in this port) isn't. */
-  const hasTreeData = !!treeChildrenKey && !groupByField;
+  /** Tree mode is on, and grouping/virtual-scroll (its incompatible render paths in this port) aren't. */
+  const hasTreeData = !!treeChildrenKey && !groupByField && !virtualScroll;
 
   function childrenOf(row: InanduGridRow): readonly InanduGridRow[] | undefined {
     const value = treeChildrenKey ? row[treeChildrenKey] : undefined;
@@ -476,9 +486,13 @@ export function useInanduGrid({
     setExpandedTreeRows(next);
   }
 
-  // Grouping and tree mode both bypass pagination entirely, same as grid-angular — neither has a
-  // meaningful "page" (rows are bucketed by group, or nested by parent/child).
-  const paginationActive = pageSize > 0 && !groupByField && !hasTreeData;
+  /** Virtualization is on, and grouping (this port's one incompatible combo — see the option's doc comment) isn't. */
+  const hasVirtualScroll = virtualScroll && !groupByField;
+
+  // Grouping, tree mode, and virtualization all bypass pagination entirely, same as grid-angular —
+  // none of them has a meaningful "page" (rows are bucketed by group, nested by parent/child, or
+  // windowed by scroll position instead).
+  const paginationActive = pageSize > 0 && !groupByField && !hasTreeData && !hasVirtualScroll;
   const pageCount = paginationActive ? Math.max(1, Math.ceil(sortedFilteredRows.length / pageSize)) : 1;
   const clampedPage = Math.min(page, pageCount - 1);
 
@@ -866,6 +880,7 @@ export function useInanduGrid({
     setAllTreeRowsExpanded,
     isRowExpanded,
     toggleRowExpanded,
+    hasVirtualScroll,
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,

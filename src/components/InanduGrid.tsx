@@ -76,13 +76,32 @@ export interface InanduGridProps {
   renderDetail?: (row: InanduGridRow) => ReactNode;
   /** Collapses any other expanded row first, accordion-style, when a new one expands. Off (any number of rows can be expanded at once) by default. */
   singleDetailExpand?: boolean;
+  /**
+   * Opt-in row virtualization for large datasets — only rows scrolled into view (plus a small
+   * overscan runway) are actually mounted. Bypasses pagination entirely, same as grouping.
+   * Auto-disabled while grouped (this port doesn't interleave group headers into the virtualized
+   * window the way grid-angular does); also disables master-detail, row drag-reorder, tree data,
+   * and the totals `<tfoot>`, same restrictions grid-angular's `virtualScroll` has. Default: false.
+   */
+  virtualScroll?: boolean;
+  /**
+   * Fixed row height (px) the virtualization math uses to compute scroll position and how many
+   * rows to render. Unlike grid-angular, this port doesn't auto-measure a rendered row's real
+   * height (that needs a real layout engine to verify, which unit tests can't provide) — pass the
+   * actual rendered row height for correct scrolling. Default: 40.
+   */
+  virtualRowHeight?: number;
+  /** The scrollable viewport's own height (px) — only used while `virtualScroll`. Default: 400. */
+  height?: number;
+  /** Extra rows rendered above/below the visible window, so a fast scroll doesn't flash empty space before the next render catches up. Default: 4. */
+  overscan?: number;
 }
 
 /**
  * Batteries-included table over `useInanduGrid`: sorting, free-text search, a per-column filter
  * row, pagination, single-column grouping with per-group + grand-total aggregates, row selection,
- * CSV/Excel/PDF export, i18n, and inline row editing/creation/deletion with validation.
- * Virtualization (present in grid-angular) lands in a later pass.
+ * CSV/Excel/PDF export, i18n, inline row editing/creation/deletion with validation, and row
+ * virtualization for large datasets.
  */
 export function InanduGrid({
   rows,
@@ -111,6 +130,10 @@ export function InanduGrid({
   treeDefaultExpanded = 'none',
   renderDetail,
   singleDetailExpand = false,
+  virtualScroll = false,
+  virtualRowHeight = 40,
+  height = 400,
+  overscan = 4,
 }: InanduGridProps) {
   const {
     visibleColumns,
@@ -174,6 +197,7 @@ export function InanduGrid({
     toggleTreeRow,
     isRowExpanded,
     toggleRowExpanded,
+    hasVirtualScroll,
   } = useInanduGrid({
     rows,
     columns,
@@ -192,12 +216,14 @@ export function InanduGrid({
     treeChildrenKey,
     treeDefaultExpanded,
     singleDetailExpand,
+    virtualScroll,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
   const [dragOverField, setDragOverField] = useState<string | undefined>(undefined);
   const [dragOverRow, setDragOverRow] = useState<InanduGridRow | undefined>(undefined);
   const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
 
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedRows));
@@ -229,9 +255,24 @@ export function InanduGrid({
   const groupableColumns = visibleColumns.filter(column => column.groupable !== false);
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
   const hasRowActions = editableColumns.length > 0 || deletable || creatable;
-  const hasRowDragHandle = rowReorder && !groupByField;
-  const hasMasterDetail = !!renderDetail && !groupByField;
+  const hasRowDragHandle = rowReorder && !groupByField && !hasVirtualScroll;
+  const hasMasterDetail = !!renderDetail && !groupByField && !hasVirtualScroll;
   const extraColumnCount = (hasMasterDetail ? 1 : 0) + (hasRowDragHandle ? 1 : 0) + (selectable ? 1 : 0) + (hasRowActions ? 1 : 0);
+
+  /**
+   * The virtualized window: `visibleRows[windowStart, windowEnd)` is what actually mounts, plus a
+   * small overscan runway on each side. `topSpacerHeight`/`bottomSpacerHeight` (rendered as one
+   * `<tr>` each) stand in for the rows *not* mounted, so the container's scrollbar still reflects
+   * the full, real scrollable height — same `FixedSizeVirtualScrollStrategy` assumption (a uniform
+   * row height) grid-angular's own virtual scroll makes, see `virtualRowHeight`'s doc comment.
+   */
+  const windowStart = hasVirtualScroll ? Math.max(0, Math.floor(scrollTop / virtualRowHeight) - overscan) : 0;
+  const windowEnd = hasVirtualScroll
+    ? Math.min(visibleRows.length, Math.ceil((scrollTop + height) / virtualRowHeight) + overscan)
+    : visibleRows.length;
+  const windowedRows = hasVirtualScroll ? visibleRows.slice(windowStart, windowEnd) : visibleRows;
+  const topSpacerHeight = windowStart * virtualRowHeight;
+  const bottomSpacerHeight = (visibleRows.length - windowEnd) * virtualRowHeight;
 
   function patchFilterValue(field: string, patch: Partial<InanduGridColumnFilterValue>) {
     setFilterValue(field, { ...filterValues[field], ...patch });
@@ -408,6 +449,11 @@ export function InanduGrid({
           </label>
         </div>
       )}
+      <div
+        className={hasVirtualScroll ? 'inandu-grid-viewport' : undefined}
+        style={hasVirtualScroll ? { height, overflow: 'auto' } : undefined}
+        onScroll={hasVirtualScroll ? e => setScrollTop(e.currentTarget.scrollTop) : undefined}
+      >
       <table className="inandu-grid" onKeyDown={handleTableKeyDown}>
         <thead>
           <tr>
@@ -490,29 +536,44 @@ export function InanduGrid({
               <RowGroup key={group.key} group={group} aggregateColumns={aggregateColumns} aggregateLabel={aggregateLabel} extraColumnCount={extraColumnCount} {...rowProps} />
             ))
           ) : (
-            visibleRows.map((row, index) => (
-              <DataRow
-                key={row['id'] != null ? String(row['id']) : index}
-                row={row}
-                rowIndex={index}
-                clipboard={clipboard}
-                hasRowDragHandle={hasRowDragHandle}
-                isDragOverRow={draggingRow !== undefined && dragOverRow === row}
-                onRowDragStart={() => onRowDragStart(row)}
-                onRowDragOver={() => setDragOverRow(row)}
-                onRowDragLeave={() => setDragOverRow(current => (current === row ? undefined : current))}
-                onRowDrop={() => onRowDrop(row)}
-                hasMasterDetail={hasMasterDetail}
-                isRowExpanded={isRowExpanded(row)}
-                toggleRowExpanded={() => toggleRowExpanded(row)}
-                renderDetail={renderDetail}
-                extraColumnCount={extraColumnCount}
-                {...rowProps}
-              />
-            ))
+            <>
+              {hasVirtualScroll && topSpacerHeight > 0 && (
+                <tr aria-hidden="true">
+                  <td style={{ height: topSpacerHeight, padding: 0, border: 'none' }} colSpan={visibleColumns.length + extraColumnCount} />
+                </tr>
+              )}
+              {windowedRows.map((row, offset) => {
+                const index = windowStart + offset;
+                return (
+                  <DataRow
+                    key={row['id'] != null ? String(row['id']) : index}
+                    row={row}
+                    rowIndex={index}
+                    clipboard={clipboard}
+                    hasRowDragHandle={hasRowDragHandle}
+                    isDragOverRow={draggingRow !== undefined && dragOverRow === row}
+                    onRowDragStart={() => onRowDragStart(row)}
+                    onRowDragOver={() => setDragOverRow(row)}
+                    onRowDragLeave={() => setDragOverRow(current => (current === row ? undefined : current))}
+                    onRowDrop={() => onRowDrop(row)}
+                    hasMasterDetail={hasMasterDetail}
+                    isRowExpanded={isRowExpanded(row)}
+                    toggleRowExpanded={() => toggleRowExpanded(row)}
+                    renderDetail={renderDetail}
+                    extraColumnCount={extraColumnCount}
+                    {...rowProps}
+                  />
+                );
+              })}
+              {hasVirtualScroll && bottomSpacerHeight > 0 && (
+                <tr aria-hidden="true">
+                  <td style={{ height: bottomSpacerHeight, padding: 0, border: 'none' }} colSpan={visibleColumns.length + extraColumnCount} />
+                </tr>
+              )}
+            </>
           )}
         </tbody>
-        {aggregateColumns.length > 0 && (
+        {aggregateColumns.length > 0 && !hasVirtualScroll && (
           <tfoot>
             <tr className="inandu-grid-totals-row">
               {hasMasterDetail && <td />}
@@ -528,7 +589,8 @@ export function InanduGrid({
           </tfoot>
         )}
       </table>
-      {pageSize > 0 && !groupByField && (
+      </div>
+      {pageSize > 0 && !groupByField && !hasVirtualScroll && (
         <div className="inandu-grid-pagination">
           <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
             ‹ {t('MsgPreviousPage')}
