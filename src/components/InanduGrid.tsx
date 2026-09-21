@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type DragEvent as ReactDragEvent,
@@ -9,9 +10,10 @@ import {
   type ReactNode,
 } from 'react';
 import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from '../core';
-import { AGGREGATE_SYMBOLS, formatCellValue } from '../core';
+import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
+import { measureColumnContentWidth } from '../utils/measureColumn';
 import { createTranslator, InanduGridMessageKey } from '../utils/translate';
 
 type Translator = (key: InanduGridMessageKey, params?: Record<string, string | number>) => string;
@@ -95,6 +97,13 @@ export interface InanduGridProps {
   height?: number;
   /** Extra rows rendered above/below the visible window, so a fast scroll doesn't flash empty space before the next render catches up. Default: 4. */
   overscan?: number;
+  /**
+   * Double-click a column's resize handle to fit its width to its widest currently-rendered value
+   * (header included). Measures real rendered text width via the DOM (`measureColumnContentWidth`)
+   * — like grid-angular's own autosize, this only measures what's actually mounted (one page, or
+   * the virtual window), not the full dataset. Default: false.
+   */
+  autosize?: boolean;
 }
 
 /**
@@ -134,6 +143,7 @@ export function InanduGrid({
   virtualRowHeight = 40,
   height = 400,
   overscan = 4,
+  autosize = false,
 }: InanduGridProps) {
   const {
     visibleColumns,
@@ -224,6 +234,7 @@ export function InanduGrid({
   const [dragOverRow, setDragOverRow] = useState<InanduGridRow | undefined>(undefined);
   const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const tableRef = useRef<HTMLTableElement>(null);
 
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedRows));
@@ -249,6 +260,15 @@ export function InanduGrid({
   function handleResizeMouseDown(event: ReactMouseEvent<HTMLSpanElement>, field: string) {
     event.preventDefault();
     setResizing({ field, startX: event.clientX, startWidth: effectiveWidth(field) });
+  }
+
+  /** Double-click on a resize handle → fit the column to its content. Ported from grid-angular's `onResizeHandleDblClick`. */
+  function handleResizeDoubleClick(event: ReactMouseEvent<HTMLSpanElement>, column: InanduGridColumn) {
+    if (!autosize || !tableRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const width = measureColumnContentWidth(tableRef.current, column.field, column.headerText ?? column.field);
+    if (width > 0) setColumnWidth(column.field, Math.min(MAX_COLUMN_WIDTH, width));
   }
 
   const aggregateColumns = visibleColumns.filter(column => column.aggregate);
@@ -454,7 +474,7 @@ export function InanduGrid({
         style={hasVirtualScroll ? { height, overflow: 'auto' } : undefined}
         onScroll={hasVirtualScroll ? e => setScrollTop(e.currentTarget.scrollTop) : undefined}
       >
-      <table className="inandu-grid" onKeyDown={handleTableKeyDown}>
+      <table ref={tableRef} className="inandu-grid" onKeyDown={handleTableKeyDown}>
         <thead>
           <tr>
             {hasMasterDetail && <th />}
@@ -478,6 +498,7 @@ export function InanduGrid({
               return (
                 <th
                   key={column.field}
+                  data-field={column.field}
                   style={columnStyle(column)}
                   className={dragOverField === column.field ? 'inandu-drag-over' : undefined}
                   draggable={column.reorder !== false}
@@ -494,6 +515,7 @@ export function InanduGrid({
                   <span
                     className="inandu-grid-resize-handle"
                     onMouseDown={e => handleResizeMouseDown(e, column.field)}
+                    onDoubleClick={e => handleResizeDoubleClick(e, column)}
                     onClick={e => e.stopPropagation()}
                     draggable={false}
                   />
@@ -745,7 +767,7 @@ function DataRow({
           </td>
         )}
         {columns.map(column => (
-          <td key={column.field} style={columnStyle(column)} data-field={clipboard ? column.field : undefined} tabIndex={clipboard ? 0 : undefined}>
+          <td key={column.field} style={columnStyle(column)} data-field={column.field} tabIndex={clipboard ? 0 : undefined}>
             {editing && column.editable ? (
               <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
             ) : (

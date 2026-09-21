@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
 
 const columns = [
@@ -403,6 +403,60 @@ describe('InanduGrid', () => {
     fireEvent.mouseUp(window);
 
     expect(nameHeader.style.width).toBe('30px');
+  });
+
+  describe('autosize', () => {
+    // See src/utils/measureColumn.test.ts's own comment: this stubs offsetWidth (jsdom has no real
+    // layout engine to measure against) so the surrounding logic — double-click wiring, the
+    // autosize on/off gate, MAX_COLUMN_WIDTH clamping — is verified without pretending the actual
+    // pixel measurement is meaningful here.
+    let originalOffsetWidth: PropertyDescriptor | undefined;
+
+    beforeEach(() => {
+      originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+        configurable: true,
+        get(this: HTMLElement) {
+          return (this.textContent ?? '').length * 10;
+        },
+      });
+    });
+
+    afterEach(() => {
+      if (originalOffsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth);
+    });
+
+    it('fits a column to its content on double-click when autosize is set', () => {
+      const wideRows = [{ name: 'A Genuinely Very Long Name Indeed' }];
+      render(<InanduGrid rows={wideRows} columns={columns} autosize />);
+
+      const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+      const handle = nameHeader.querySelector('.inandu-grid-resize-handle')!;
+      fireEvent.doubleClick(handle);
+
+      // "A Genuinely Very Long Name Indeed" (33 chars) * 10 = 330, +4 padding = 334 (< MAX_COLUMN_WIDTH).
+      expect(nameHeader.style.width).toBe('334px');
+    });
+
+    it('clamps autosize to MAX_COLUMN_WIDTH', () => {
+      const wideRows = [{ name: 'X'.repeat(200) }];
+      render(<InanduGrid rows={wideRows} columns={columns} autosize />);
+
+      const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+      fireEvent.doubleClick(nameHeader.querySelector('.inandu-grid-resize-handle')!);
+
+      expect(nameHeader.style.width).toBe('600px'); // MAX_COLUMN_WIDTH
+    });
+
+    it('is a no-op when autosize is not set', () => {
+      const wideRows = [{ name: 'A Genuinely Very Long Name Indeed' }];
+      render(<InanduGrid rows={wideRows} columns={columns} />);
+
+      const nameHeader = screen.getByRole('columnheader', { name: 'Sort by Name' });
+      fireEvent.doubleClick(nameHeader.querySelector('.inandu-grid-resize-handle')!);
+
+      expect(nameHeader.style.width).toBe('');
+    });
   });
 
   it('reorders rows by dragging a row handle and dropping it onto another row', () => {

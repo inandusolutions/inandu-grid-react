@@ -20,3 +20,4 @@ export { en, es, fr, it, zh, INANDU_GRID_TRANSLATIONS } from './core';
 export { createTranslator, interpolate } from './utils/translate';
 export type { InanduGridMessageKey } from './utils/translate';
 export { exportCsv, exportExcel, exportPdf, printTable, buildCsv, buildExcelXml } from './utils/exporters';
+export { measureColumnContentWidth } from './utils/measureColumn';

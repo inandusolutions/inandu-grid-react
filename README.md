@@ -4,24 +4,28 @@ The React port of [`@inandu-solutions/grid-angular`](https://github.com/inanduso
 a standalone data grid: sorting, filtering, grouping, pagination, virtual scroll, inline editing,
 CSV/Excel/PDF export, i18n and theming, with a deliberately small dependency footprint.
 
-**Status: early work in progress, not yet published to npm.** The framework-agnostic core (sorting,
-filtering, aggregation, export, i18n) is ported from grid-angular's
+**Status: early work in progress, not yet published to npm — but feature-complete with
+grid-angular.** The framework-agnostic core (sorting, filtering, aggregation, export, i18n) is
+ported from grid-angular's
 [`core/`](https://github.com/inandusolutions/inandu-grid/tree/main/projects/inandu-grid/src/lib/core)
 folder and kept in sync by hand across the two repos. The React-specific layer — the `<InanduGrid>`
-component and the `useInanduGrid()` headless hook — currently covers sorting (single- and, via
-shift-click, multi-column), free-text search,
-per-column filtering, pagination, single-column grouping with aggregates, row selection,
-CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a `lang` prop), inline row
-editing/creation/deletion with validation (required/min/max/pattern/custom/async), Excel-style
-Ctrl+C/Ctrl+V clipboard copy/paste, runtime column show/hide, sticky (pinned left/right) columns,
-column drag-reorder, column resize (drag a header's handle; no autosize/fit-to-content yet, it
-needs real layout measurement), row drag-reorder, tree data (`treeChildrenKey`, display + expand
-only — no inline editing/drag/clipboard on tree rows, same restriction as grid-angular),
-master-detail (`renderDetail`), and row virtualization (`virtualScroll`) for large datasets — unlike
-grid-angular, this port doesn't auto-measure a rendered row's real height (that needs a real layout
-engine unit tests can't provide); pass `virtualRowHeight` explicitly instead. Column
-autosize/fit-to-content is the one thing still not ported, for the same real-layout-measurement
-reason.
+component and the `useInanduGrid()` headless hook — covers sorting (single- and, via shift-click,
+multi-column), free-text search, per-column filtering, pagination, single-column grouping with
+aggregates, row selection, CSV/Excel(.xls)/PDF export, print, i18n (the 5 built-in languages, via a
+`lang` prop), inline row editing/creation/deletion with validation
+(required/min/max/pattern/custom/async), Excel-style Ctrl+C/Ctrl+V clipboard copy/paste, runtime
+column show/hide, sticky (pinned left/right) columns, column drag-reorder, column resize (drag a
+header's handle) and autosize (double-click it to fit content), row drag-reorder, tree data
+(`treeChildrenKey`, display + expand only — no inline editing/drag/clipboard on tree rows, same
+restriction as grid-angular), master-detail (`renderDetail`), and row virtualization
+(`virtualScroll`) for large datasets.
+
+Two things work slightly differently from grid-angular because they need a real browser layout
+engine that a unit-test environment can't provide: virtual scroll's row height isn't
+auto-measured — pass `virtualRowHeight` explicitly — and autosize's content measurement itself is
+trusted (ported verbatim, same DOM APIs) rather than end-to-end tested; see
+[`measureColumn.ts`](src/utils/measureColumn.ts)'s doc comment for exactly what its test suite does
+and doesn't cover.
 
 - **Angular version:** [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) — the
   original, feature-complete, MIT-licensed grid. Start there if you need something production-ready
