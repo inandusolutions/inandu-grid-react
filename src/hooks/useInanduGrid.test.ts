@@ -31,6 +31,34 @@ describe('useInanduGrid: allColumns', () => {
   });
 });
 
+describe('useInanduGrid: sortedRows', () => {
+  it('includes every filtered/sorted row regardless of pagination, unlike exportRows', () => {
+    const manyRows = Array.from({ length: 5 }, (_, i) => ({ name: `Row ${i}`, age: i }));
+    const { result } = renderHook(() => useInanduGrid({ rows: manyRows, columns, pageSize: 2 }));
+
+    expect(result.current.exportRows.length).toBe(2);
+    expect(result.current.sortedRows.length).toBe(5);
+  });
+
+  it('reflects the active filter and sort, same as exportRows would if unpaginated', () => {
+    const { result } = renderHook(() => useInanduGrid({ rows, columns }));
+    act(() => result.current.setSort([{ field: 'age', direction: 'desc' }]));
+    expect(result.current.sortedRows.map(r => r.name)).toEqual(['Ada']);
+  });
+});
+
+describe('useInanduGrid: locale', () => {
+  it('exposes the resolved locale, defaulting to "en"', () => {
+    const { result } = renderHook(() => useInanduGrid({ rows, columns }));
+    expect(result.current.locale).toBe('en');
+  });
+
+  it('reflects an explicit locale option', () => {
+    const { result } = renderHook(() => useInanduGrid({ rows, columns, locale: 'es' }));
+    expect(result.current.locale).toBe('es');
+  });
+});
+
 describe('useInanduGrid: runtime column pin/unpin', () => {
   it('columnPinnedSide falls back to the column\'s own declared pinned when no override was set', () => {
     const pinned = [{ ...columns[0], pinned: 'left' as const }, columns[1]];

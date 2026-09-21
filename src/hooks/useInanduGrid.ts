@@ -912,7 +912,10 @@ export function useInanduGrid({
     visibleRows,
     /** Same "what's on screen right now" set the select-all checkbox and CSV/Excel/PDF export use — the current page, or every group's rows while grouped. */
     exportRows: selectionScopeRows,
+    /** Every row matching the current filter and sort, in sort order, regardless of pagination or grouping — same as grid-angular's `sortedData()`. Unlike `exportRows`, this never stops at one page: a full-dataset export/print reads from here instead. */
+    sortedRows: sortedFilteredRows,
     filteredRowCount: sortedFilteredRows.length,
+    locale,
     sortCriteria,
     setSort: setSortCriteria,
     toggleSort,
