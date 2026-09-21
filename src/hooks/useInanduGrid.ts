@@ -143,6 +143,8 @@ export interface UseInanduGridOptions {
    * `<InanduGrid>` component's job, not this hook's — it has no way to observe scroll state itself.
    */
   virtualScroll?: boolean;
+  /** An extra per-row predicate ANDed onto the free-text + column filters — same as grid-angular's `extraRowFilter`. Lets a caller layer its own filtering (e.g. an advanced-filter query) on top of the grid's own. Unset: no extra filtering. */
+  extraRowFilter?: (row: InanduGridRow) => boolean;
 }
 
 /**
@@ -170,6 +172,7 @@ export function useInanduGrid({
   treeDefaultExpanded = 'none',
   singleDetailExpand = false,
   virtualScroll = false,
+  extraRowFilter,
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
@@ -340,6 +343,10 @@ export function useInanduGrid({
       );
     }
 
+    if (extraRowFilter) {
+      result = result.filter(extraRowFilter);
+    }
+
     if (sortCriteria.length > 0) {
       result = [...result].sort((a, b) => {
         for (const { field, direction } of sortCriteria) {
@@ -352,7 +359,7 @@ export function useInanduGrid({
     }
 
     return result;
-  }, [rows, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, locale]);
+  }, [rows, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, locale, extraRowFilter]);
 
   /**
    * `sortedFilteredRows` bucketed by the grouped column's *formatted* value, in first-seen order
@@ -403,7 +410,7 @@ export function useInanduGrid({
 
     const query = filterQuery.trim().toLowerCase();
     const activeFilters = Object.entries(filterValues).filter(([, value]) => hasMeaningfulFilterValue(value));
-    const anyFilter = !!query || activeFilters.length > 0;
+    const anyFilter = !!query || activeFilters.length > 0 || !!extraRowFilter;
     const matches = anyFilter
       ? (row: InanduGridRow): boolean => {
           if (
@@ -415,10 +422,13 @@ export function useInanduGrid({
           ) {
             return false;
           }
-          return activeFilters.every(([field, value]) => {
+          if (!activeFilters.every(([field, value]) => {
             const column = columnConfigs.get(field);
             return column ? matchesColumnFilter(column, row, value, locale) : true;
-          });
+          })) {
+            return false;
+          }
+          return extraRowFilter ? extraRowFilter(row) : true;
         }
       : undefined;
 
@@ -434,7 +444,7 @@ export function useInanduGrid({
         : undefined;
 
     return flattenTree(rows, { getChildren: childrenOf, isExpanded: row => expandedTreeRows.has(row), match: matches, compare });
-  }, [hasTreeData, rows, treeChildrenKey, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, expandedTreeRows, locale]);
+  }, [hasTreeData, rows, treeChildrenKey, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, expandedTreeRows, locale, extraRowFilter]);
 
   // Seeds `expandedTreeRows` from `treeDefaultExpanded` the first time a given `rows` array is
   // seen — same "once per distinct data(), not on every re-render" behavior grid-angular's own

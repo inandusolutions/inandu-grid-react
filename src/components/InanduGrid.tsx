@@ -78,6 +78,8 @@ export interface InanduGridProps {
   renderDetail?: (row: InanduGridRow) => ReactNode;
   /** Collapses any other expanded row first, accordion-style, when a new one expands. Off (any number of rows can be expanded at once) by default. */
   singleDetailExpand?: boolean;
+  /** An extra per-row predicate ANDed onto the free-text + column filters — same as grid-angular's `extraRowFilter`. Lets a caller layer its own filtering (e.g. an advanced-filter query) on top of the grid's own. Unset: no extra filtering. */
+  extraRowFilter?: (row: InanduGridRow) => boolean;
   /**
    * Opt-in row virtualization for large datasets — only rows scrolled into view (plus a small
    * overscan runway) are actually mounted. Bypasses pagination entirely, same as grouping.
@@ -139,6 +141,7 @@ export function InanduGrid({
   treeDefaultExpanded = 'none',
   renderDetail,
   singleDetailExpand = false,
+  extraRowFilter,
   virtualScroll = false,
   virtualRowHeight = 40,
   height = 400,
@@ -227,6 +230,7 @@ export function InanduGrid({
     treeChildrenKey,
     treeDefaultExpanded,
     singleDetailExpand,
+    extraRowFilter,
     virtualScroll,
   });
 

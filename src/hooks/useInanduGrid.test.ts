@@ -31,6 +31,48 @@ describe('useInanduGrid: allColumns', () => {
   });
 });
 
+describe('useInanduGrid: extraRowFilter', () => {
+  const people = [
+    { name: 'Ada', age: 30 },
+    { name: 'Alan', age: 25 },
+    { name: 'Grace', age: 40 },
+  ];
+
+  it('ANDs onto free-text and column filters', () => {
+    const { result } = renderHook(() =>
+      useInanduGrid({ rows: people, columns, extraRowFilter: row => (row.age as number) >= 30 }),
+    );
+    expect(result.current.sortedRows.map(r => r.name)).toEqual(['Ada', 'Grace']);
+
+    act(() => result.current.setFilterQuery('a'));
+    expect(result.current.sortedRows.map(r => r.name)).toEqual(['Ada', 'Grace']); // both still contain "a"
+  });
+
+  it('unset means no extra filtering', () => {
+    const { result } = renderHook(() => useInanduGrid({ rows: people, columns }));
+    expect(result.current.sortedRows.length).toBe(3);
+  });
+
+  it('also applies in tree mode', () => {
+    const treeRows = [
+      { name: 'Ada', age: 30, kids: [{ name: 'Kid1', age: 5 }] },
+      { name: 'Alan', age: 25, kids: [] },
+    ];
+    const { result } = renderHook(() =>
+      useInanduGrid({
+        rows: treeRows,
+        columns,
+        treeChildrenKey: 'kids',
+        treeDefaultExpanded: 'all',
+        extraRowFilter: row => (row.age as number) >= 30,
+      }),
+    );
+    const names = result.current.treeRows.map(t => t.row.name);
+    expect(names).not.toContain('Alan');
+    expect(names).toContain('Ada');
+  });
+});
+
 describe('useInanduGrid: sortedRows', () => {
   it('includes every filtered/sorted row regardless of pagination, unlike exportRows', () => {
     const manyRows = Array.from({ length: 5 }, (_, i) => ({ name: `Row ${i}`, age: i }));
