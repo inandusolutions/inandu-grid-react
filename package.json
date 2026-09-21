@@ -1,6 +1,6 @@
 {
   "name": "@inandu-solutions/grid-react",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Standalone React data grid: sorting, free-text and per-column filtering, grouping, pagination, CSV/Excel/PDF export and print, i18n (5 languages) and theming, with a deliberately small dependency footprint. The React port of @inandu-solutions/grid-angular.",
   "keywords": [
     "react",
@@ -46,7 +46,9 @@
       "import": "./dist/inandu-grid-react.js",
       "require": "./dist/inandu-grid-react.cjs"
     },
-    "./style.css": "./dist/style.css"
+    "./style.css": {
+      "default": "./dist/style.css"
+    }
   },
   "files": [
     "dist"
