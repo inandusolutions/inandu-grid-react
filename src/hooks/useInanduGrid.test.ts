@@ -9,6 +9,18 @@ const columns = [
 
 const rows = [{ name: 'Ada', age: 30 }];
 
+describe('useInanduGrid: clearAllFilters', () => {
+  it('removes every column filter entry at once', () => {
+    const { result } = renderHook(() => useInanduGrid({ rows, columns }));
+    act(() => result.current.setFilterValue('name', { text: 'a' }));
+    act(() => result.current.setFilterValue('age', { min: '10' }));
+    expect(result.current.filterValues).toEqual({ name: { text: 'a' }, age: { min: '10' } });
+
+    act(() => result.current.clearAllFilters());
+    expect(result.current.filterValues).toEqual({});
+  });
+});
+
 describe('useInanduGrid: allColumns', () => {
   it('includes hidden columns, unlike visibleColumns', () => {
     const { result } = renderHook(() => useInanduGrid({ rows, columns }));

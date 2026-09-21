@@ -308,6 +308,12 @@ export function useInanduGrid({
     setFilterValues(prev => ({ ...prev, [field]: value }));
   }
 
+  /** Removes every column's filter entry at once — same as grid-angular's `clearAllColumnFilters`. */
+  function clearAllFilters(): void {
+    setPage(0);
+    setFilterValues({});
+  }
+
   const sortedFilteredRows = useMemo(() => {
     let result = rows;
 
@@ -914,6 +920,7 @@ export function useInanduGrid({
     sortPriorityFor,
     filterValues,
     setFilterValue,
+    clearAllFilters,
     filterQuery,
     setFilterQuery,
     page: clampedPage,
