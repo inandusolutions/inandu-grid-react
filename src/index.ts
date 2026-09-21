@@ -2,7 +2,17 @@ export { InanduGrid } from './components/InanduGrid';
 export type { InanduGridProps } from './components/InanduGrid';
 
 export { useInanduGrid } from './hooks/useInanduGrid';
-export type { InanduGridCellPaste, InanduGridColumn, InanduGridGroup, InanduGridRowSave, InanduGridSort, UseInanduGridOptions } from './hooks/useInanduGrid';
+export type {
+  InanduGridCellPaste,
+  InanduGridColumn,
+  InanduGridGroup,
+  InanduGridRowSave,
+  InanduGridSort,
+  UseInanduGridOptions,
+  InanduCellRenderContext,
+  InanduHeaderRenderContext,
+  InanduEditRenderContext,
+} from './hooks/useInanduGrid';
 
 export type {
   InanduColumnType,

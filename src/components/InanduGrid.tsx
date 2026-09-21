@@ -12,6 +12,7 @@ import {
 import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
+import type { InanduCellRenderContext, InanduEditRenderContext, InanduHeaderRenderContext } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
 import { measureColumnContentWidth } from '../utils/measureColumn';
 import { createTranslator, InanduGridMessageKey } from '../utils/translate';
@@ -515,7 +516,9 @@ export function InanduGrid({
                   onClick={e => toggleSort(column.field, e.shiftKey)}
                   aria-label={t('MsgSortBy', { column: column.headerText ?? column.field })}
                 >
-                  {column.headerText ?? column.field}
+                  {column.renderHeader
+                    ? column.renderHeader({ title: column.headerText ?? column.field, field: column.field } satisfies InanduHeaderRenderContext)
+                    : (column.headerText ?? column.field)}
                   {direction ? (direction === 'asc' ? ' ▲' : ' ▼') : ''}
                   {priority !== undefined && <sup className="inandu-grid-sort-priority">{priority}</sup>}
                   <span
@@ -775,7 +778,19 @@ function DataRow({
         {columns.map(column => (
           <td key={column.field} style={columnStyle(column)} data-field={column.field} tabIndex={clipboard ? 0 : undefined}>
             {editing && column.editable ? (
-              <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+              column.renderEditor ? (
+                column.renderEditor({
+                  value: rowDraft[column.field],
+                  row,
+                  field: column.field,
+                  setValue: value => setRowDraftValue(column.field, value),
+                  error: fieldErrors[column.field],
+                } satisfies InanduEditRenderContext)
+              ) : (
+                <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+              )
+            ) : column.renderCell ? (
+              column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
             ) : (
               formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
             )}
@@ -839,7 +854,17 @@ function NewRowDraft({
       {columns.map(column => (
         <td key={column.field} style={columnStyle(column)}>
           {column.editable ? (
-            <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+            column.renderEditor ? (
+              column.renderEditor({
+                value: rowDraft[column.field],
+                row: {},
+                field: column.field,
+                setValue: value => setRowDraftValue(column.field, value),
+                error: fieldErrors[column.field],
+              } satisfies InanduEditRenderContext)
+            ) : (
+              <EditCell column={column} value={rowDraft[column.field]} error={fieldErrors[column.field]} onChange={value => setRowDraftValue(column.field, value)} t={t} />
+            )
           ) : null}
         </td>
       ))}
@@ -952,8 +977,12 @@ function TreeRow({
               ) : (
                 <span className="inandu-grid-tree-toggle-spacer" aria-hidden="true" />
               )}
-              {formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
+              {column.renderCell
+                ? column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
+                : formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
             </span>
+          ) : column.renderCell ? (
+            column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
           ) : (
             formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
           )}

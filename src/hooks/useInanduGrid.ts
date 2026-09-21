@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ColumnConfig,
   collectTreeRows,
@@ -57,6 +57,34 @@ export interface InanduGridColumn {
   width?: number;
   /** Whether this column's header can be dragged to reorder columns. Default: true. */
   reorder?: boolean;
+  /** Custom rendering for this column's cells, in place of the built-in formatted text. Doesn't affect editing — pair with `renderEditor` if this column is also `editable`. */
+  renderCell?: (ctx: InanduCellRenderContext) => ReactNode;
+  /** Custom rendering for this column's header label, in place of the built-in plain text. The sort arrow, multi-sort priority badge, and resize handle next to it are unaffected — same scope as grid-angular's `#inanduHeaderTemplate`. */
+  renderHeader?: (ctx: InanduHeaderRenderContext) => ReactNode;
+  /** Custom editor for this column's cells while their row is in edit/create mode, in place of the built-in type-aware `<input>`/`<select>`. The column must still be `editable`; save-time parsing/validation is unaffected — call `setValue` with the same raw control shape the built-in control would produce (a string for `'string'`/`'number'`/`'date'`, a boolean for `'boolean'`). */
+  renderEditor?: (ctx: InanduEditRenderContext) => ReactNode;
+}
+
+/** Passed to a column's `renderCell` — the same information the built-in formatted-text cell would use. */
+export interface InanduCellRenderContext {
+  value: unknown;
+  row: InanduGridRow;
+  field: string;
+}
+
+/** Passed to a column's `renderHeader`. `title` is the resolved display label (`headerText` if set, else `field` — the same fallback the built-in plain-text header uses). */
+export interface InanduHeaderRenderContext {
+  title: string;
+  field: string;
+}
+
+/** Passed to a column's `renderEditor`. `row` is `{}` for the add-new-row draft. */
+export interface InanduEditRenderContext {
+  value: unknown;
+  row: InanduGridRow;
+  field: string;
+  setValue: (value: unknown) => void;
+  error: string | undefined;
 }
 
 /** Passed to `onRowSave` — everything `saveRow()` parsed and validated for one already-existing row. */

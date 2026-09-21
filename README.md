@@ -58,6 +58,9 @@ covers:
 - Tree data (`treeChildrenKey`) — display and expand only, no inline editing/drag/clipboard on tree
   rows, same restriction as grid-angular
 - Master-detail (`renderDetail`)
+- Custom cell / header / edit-control rendering per column (`renderCell` / `renderHeader` /
+  `renderEditor`) — drop in your own component in place of the built-in formatted text, header
+  label, or edit-mode input, without losing sorting, resizing, or validation
 - Row virtualization (`virtualScroll`) for large datasets
 
 Two things work slightly differently from grid-angular because they need a real browser layout

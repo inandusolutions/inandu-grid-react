@@ -619,3 +619,73 @@ describe('InanduGrid', () => {
     });
   });
 });
+
+describe('InanduGrid: custom render slots', () => {
+  it('renderCell replaces the formatted display value', () => {
+    const columnsWithRenderCell = [
+      columns[0],
+      { ...columns[1], renderCell: ({ value }: { value: unknown }) => <strong>{`Age: ${value}`}</strong> },
+    ];
+    render(<InanduGrid rows={rows} columns={columnsWithRenderCell} />);
+    expect(screen.getByText('Age: 41')).toBeInTheDocument();
+    expect(screen.queryByText('41')).not.toBeInTheDocument();
+  });
+
+  it('renderCell receives the row and field too', () => {
+    const columnsWithRenderCell = [
+      { ...columns[0], renderCell: ({ row, field }: { row: Record<string, unknown>; field: string }) => <em>{`${field}=${row.name}`}</em> },
+      columns[1],
+    ];
+    render(<InanduGrid rows={rows} columns={columnsWithRenderCell} />);
+    expect(screen.getByText('name=Beatriz')).toBeInTheDocument();
+  });
+
+  it('renderHeader replaces the header label; sort arrow/priority/resize handle are unaffected', () => {
+    const columnsWithRenderHeader = [
+      { ...columns[0], renderHeader: ({ title }: { title: string }) => <span>{`★ ${title}`}</span> },
+      columns[1],
+    ];
+    render(<InanduGrid rows={rows} columns={columnsWithRenderHeader} />);
+    const header = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    expect(header).toHaveTextContent('★ Name');
+    fireEvent.click(header);
+    expect(header).toHaveTextContent('★ Name ▲');
+  });
+
+  it('renderEditor replaces the built-in input while editing an existing row', async () => {
+    const columnsWithRenderEditor = [
+      {
+        ...editableColumns[0],
+        renderEditor: ({ value, setValue }: { value: unknown; setValue: (v: unknown) => void }) => (
+          <input aria-label="Custom name editor" value={value as string} onChange={e => setValue(e.target.value)} />
+        ),
+      },
+      editableColumns[1],
+    ];
+    const onRowSave = vi.fn();
+    render(<InanduGrid rows={rows} columns={columnsWithRenderEditor} onRowSave={onRowSave} />);
+
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    expect(screen.queryByLabelText('Edit Name')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Custom name editor'), { target: { value: 'Zoe' } });
+    fireEvent.click(screen.getByText('Save'));
+    await waitForElementToBeRemoved(() => screen.queryByLabelText('Custom name editor'));
+    expect(onRowSave).toHaveBeenCalledWith(expect.objectContaining({ values: expect.objectContaining({ name: 'Zoe' }) }));
+  });
+
+  it('renderEditor also replaces the built-in input in the new-row draft', () => {
+    const columnsWithRenderEditor = [
+      {
+        ...editableColumns[0],
+        renderEditor: ({ value, setValue }: { value: unknown; setValue: (v: unknown) => void }) => (
+          <input aria-label="Custom name editor" value={(value as string) ?? ''} onChange={e => setValue(e.target.value)} />
+        ),
+      },
+      editableColumns[1],
+    ];
+    render(<InanduGrid rows={rows} columns={columnsWithRenderEditor} creatable />);
+    fireEvent.click(screen.getByText('Add row'));
+    expect(screen.getByLabelText('Custom name editor')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Edit Name')).not.toBeInTheDocument();
+  });
+});
