@@ -36,6 +36,7 @@ export { hasMeaningfulFilterValue, matchesColumnFilter } from './filter';
 export { AGGREGATE_SYMBOLS, computeGroupAggregates } from './aggregate';
 export { placeColumnsByOrder } from './columns';
 export { parseDraftValue, parsePastedCellValue } from './parse';
+export { escapeAttributeSelectorValue } from './dom';
 
 export { escapeCsvValue } from './export/csv';
 export { escapeMarkup } from './export/markup';

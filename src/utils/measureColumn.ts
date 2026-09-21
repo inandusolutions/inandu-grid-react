@@ -1,3 +1,5 @@
+import { escapeAttributeSelectorValue } from '../core';
+
 /**
  * Widest rendered value in a column (its header and every currently-rendered data cell), measured
  * against that column's own computed font, plus the cell's horizontal padding. Reads only what's
@@ -13,7 +15,7 @@
  * real browser, same as any other `getBoundingClientRect()`-dependent code would be.
  */
 export function measureColumnContentWidth(host: HTMLElement, field: string, headerText: string): number {
-  const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(field) : field.replace(/"/g, '\\"');
+  const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(field) : escapeAttributeSelectorValue(field);
   const cells = Array.from(host.querySelectorAll<HTMLElement>(`td[data-field="${escaped}"]`));
   const headerCell = host.querySelector<HTMLElement>(`th[data-field="${escaped}"]`);
   const sample = cells[0] ?? headerCell ?? host;
