@@ -139,6 +139,11 @@ npm test           # Vitest + React Testing Library
 npm run build      # library build (dist/)
 ```
 
+## Contributing
+
+Issues and PRs welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) first, and note the
+[Code of Conduct](.github/CODE_OF_CONDUCT.md). Security reports: [`.github/SECURITY.md`](.github/SECURITY.md).
+
 ## License
 
 MIT © [Inandu SAS](https://inandu.com)
