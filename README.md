@@ -1,11 +1,13 @@
 # inandu-grid-react
 
-The React port of [`@inandu-solutions/grid-angular`](https://github.com/inandusolutions/inandu-grid) —
-a standalone data grid: sorting, filtering, grouping, pagination, virtual scroll, inline editing,
-CSV/Excel/PDF export and i18n, with a deliberately small dependency footprint.
+**A lightweight React data grid with the essentials other grids gate behind a paid enterprise
+licence — row grouping, aggregates, inline editing and Excel-compatible export — fully MIT.** The
+React port of [`@inandu-solutions/grid-angular`](https://github.com/inandusolutions/inandu-grid),
+kept in sync feature-for-feature by hand.
 
 [![npm](https://img.shields.io/npm/v/@inandu-solutions/grid-react.svg)](https://www.npmjs.com/package/@inandu-solutions/grid-react)
 [![downloads](https://img.shields.io/npm/dm/@inandu-solutions/grid-react.svg)](https://www.npmjs.com/package/@inandu-solutions/grid-react)
+[![CI](https://github.com/inandusolutions/inandu-grid-react/actions/workflows/ci.yml/badge.svg)](https://github.com/inandusolutions/inandu-grid-react/actions/workflows/ci.yml)
 [![minzipped size](https://img.shields.io/bundlephobia/minzip/@inandu-solutions/grid-react)](https://bundlephobia.com/package/@inandu-solutions/grid-react)
 [![license](https://img.shields.io/npm/l/@inandu-solutions/grid-react.svg)](LICENSE)
 ![React](https://img.shields.io/badge/React-18%20%7C%2019-61dafb)
@@ -16,18 +18,59 @@ CSV/Excel/PDF export and i18n, with a deliberately small dependency footprint.
 
 <sub>Live free-text search on the demo grid. [Try every feature →](https://inandusolutions.github.io/inandu-grid-react/)</sub>
 
-## Quick links
+## Try it in 30 seconds
 
-- **▶️ Live demo:** <https://inandusolutions.github.io/inandu-grid-react/> — try every feature in the browser.
-- **⚡ StackBlitz:** [a minimal editable example](https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz) —
+```bash
+npm install @inandu-solutions/grid-react
+```
+
+```tsx
+import { InanduGrid } from '@inandu-solutions/grid-react';
+import '@inandu-solutions/grid-react/style.css';
+
+const rows = [{ name: 'Ada', age: 36 }, { name: 'Alan', age: 41 }];
+const columns = [{ field: 'name', headerText: 'Name' }, { field: 'age', headerText: 'Age', type: 'number' as const }];
+
+export default function App() {
+  return <InanduGrid rows={rows} columns={columns} pageSize={25} />; // sorting + filtering are on by default
+}
+```
+
+- **▶️ [Live demo](https://inandusolutions.github.io/inandu-grid-react/)** — try every feature in the browser.
+- **⚡ [Edit in StackBlitz](https://stackblitz.com/github/inandusolutions/inandu-grid-react/tree/main/examples/stackblitz)** —
   installs `@inandu-solutions/grid-react` from npm; edit `src/App.tsx` and it updates live ([source](examples/stackblitz)).
-- **Package:** [`@inandu-solutions/grid-react`](https://www.npmjs.com/package/@inandu-solutions/grid-react)
+- **📦 [`@inandu-solutions/grid-react` on npm](https://www.npmjs.com/package/@inandu-solutions/grid-react)**
   (MIT) — `0.x` while the API settles; expect breaking changes between minors until `1.0.0`.
-- **Angular version:** [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) — the
-  original, feature-complete, MIT-licensed grid this repo is ported from.
-- **Commercial add-ons:** `@inandu-solutions/grid-pro-react` *(private, paid, not released yet)* —
-  the React port of `@inandu-solutions/grid-pro`, depends on this package the same way grid-pro
-  depends on grid-angular.
+
+## Who is this for?
+
+- **CRUD / business apps** that need sortable, filterable, editable tables without pulling in a
+  full enterprise grid framework.
+- **Admin dashboards** that need grouping, aggregates and CSV/Excel/PDF export out of the box.
+- **Data-heavy React apps** that need virtual scroll and server-side paging for large datasets,
+  without the bundle size of a kitchen-sink grid.
+
+**When not to use it:** if you need pivot tables or integrated charting built into the grid itself,
+this isn't that — see [Not included](#not-included) below.
+
+## Angular version
+
+[`inandu-grid`](https://github.com/inandusolutions/inandu-grid) is the original, feature-complete,
+MIT-licensed Angular grid this repo is ported from — same feature set, same core logic, adapted for
+Angular signals/standalone components instead of React hooks.
+
+## Not included
+
+Deliberately *not* a kitchen sink: no pivoting and no integrated charts — those stay out of scope
+so the core stays small and auditable. Everything else on this page (grouping, aggregates, editing,
+export, virtual scroll, server-side mode) is included, free, no enterprise tier. If you need pivot
+tables or built-in charts, a heavier framework is the right tool; if you want a focused, free,
+lightweight grid, this is it.
+
+## Commercial add-ons
+
+`@inandu-solutions/grid-pro-react` *(private, paid, not released yet)* — the React port of
+`@inandu-solutions/grid-pro`, depends on this package the same way grid-pro depends on grid-angular.
 
 ## See it
 
