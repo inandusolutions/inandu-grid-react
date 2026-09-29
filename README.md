@@ -146,4 +146,4 @@ Issues and PRs welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) first, 
 
 ## License
 
-MIT © [Inandu SAS](https://inandu.com)
+MIT © [Inandu SAS](https://www.inandu.com/)

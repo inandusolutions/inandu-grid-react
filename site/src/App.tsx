@@ -175,7 +175,7 @@ export function App() {
       <footer>
         <div className="wrap footer-row">
           <div>
-            <strong>inandu-grid-react</strong> &mdash; MIT &copy; <a href="https://inandu.com">Inandu SAS</a>
+            <strong>inandu-grid-react</strong> &mdash; MIT &copy; <a href="https://www.inandu.com/">Inandu SAS</a>
           </div>
           <div className="footer-links">
             <a href="https://github.com/inandusolutions/inandu-grid-react">GitHub</a>
