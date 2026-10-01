@@ -1,0 +1,76 @@
+version: 2
+updates:
+  # The library itself.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+    groups:
+      # react and react-dom must move in lockstep (react-dom peer-pins react).
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      # vitest, @vitejs/plugin-react and vite-plugin-dts peer-depend on vite.
+      vite:
+        patterns:
+          - vite
+          - vitest
+          - "@vitejs/*"
+          - vite-plugin-dts
+      dev-minor-patch:
+        dependency-type: development
+        exclude-patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+          - vite
+          - vitest
+          - "@vitejs/*"
+          - vite-plugin-dts
+        update-types:
+          - minor
+          - patch
+
+  # The GitHub Pages site and the StackBlitz example are consumer apps: one
+  # grouped PR per directory for minor/patch keeps the noise down.
+  - package-ecosystem: npm
+    directories:
+      - /site
+      - /examples/stackblitz
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+    groups:
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      minor-patch:
+        exclude-patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
