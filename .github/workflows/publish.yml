@@ -53,6 +53,10 @@ jobs:
             exit 1
           fi
 
+      # Node 22 ships npm 10.x; trusted publishing needs npm >= 11.5.1.
+      - name: Update npm
+        run: npm install -g npm@^11.5.1
+
       - name: Check npm supports trusted publishing (>= 11.5.1)
         run: |
           npm --version
