@@ -47,8 +47,9 @@ export default function App() {
 - **CRUD / business apps** that need sortable, filterable, editable tables without pulling in a
   full enterprise grid framework.
 - **Admin dashboards** that need grouping, aggregates and CSV/Excel/PDF export out of the box.
-- **Data-heavy React apps** that need virtual scroll and server-side paging for large datasets,
-  without the bundle size of a kitchen-sink grid.
+- **Data-heavy React apps** that need virtual scroll, or server-side sort / filter / paging
+  against a backend (see [Server-side data](#server-side-data)), without the bundle size of a
+  kitchen-sink grid.
 
 **When not to use it:** if you need pivot tables or integrated charting built into the grid itself,
 this isn't that — see [Not included](#not-included) below.
@@ -63,7 +64,7 @@ Angular signals/standalone components instead of React hooks.
 
 Deliberately *not* a kitchen sink: no pivoting and no integrated charts — those stay out of scope
 so the core stays small and auditable. Everything else on this page (grouping, aggregates, editing,
-export, virtual scroll, server-side mode) is included, free, no enterprise tier. If you need pivot
+export, virtual scroll, paged server-side mode) is included, free, no enterprise tier. If you need pivot
 tables or built-in charts, a heavier framework is the right tool; if you want a focused, free,
 lightweight grid, this is it.
 
@@ -108,6 +109,8 @@ covers:
   shift-click across cells to select a rectangular block; `Ctrl+C` copies the whole range as TSV
   when `clipboard` is also on
 - Row virtualization (`virtualScroll`) for large datasets
+- Server-side sort / search / filter / paging (`serverSide` + `useInanduGridServer`) — paged only;
+  grid-angular's server-side infinite scroll isn't ported. See [Server-side data](#server-side-data)
 
 Two things work slightly differently from grid-angular because they need a real browser layout
 engine that a unit-test environment can't provide: virtual scroll's row height isn't
@@ -129,6 +132,37 @@ import '@inandu-solutions/grid-react/style.css'; // optional default styling —
 const { visibleRows, filteredRowCount, sortCriteria, setSort, filterValues, setFilterValue, page, setPage, pageCount } =
   useInanduGrid({ rows, columns, pageSize: 25 });
 ```
+
+## Server-side data
+
+For tables too big to load whole, let the backend sort, filter and page, and keep the grid's UI
+unchanged:
+
+```tsx
+import { InanduGrid, useInanduGridServer } from '@inandu-solutions/grid-react';
+
+const server = useInanduGridServer({ url: '/api/products' });
+
+<InanduGrid
+  rows={server.rows}
+  columns={columns}
+  pageSize={25}
+  serverSide={{ totalItems: server.total }}
+  onQueryChange={server.setQuery}
+/>;
+```
+
+`useInanduGridServer` turns the grid's page / sort / search / column filters into a query string
+(`?page=2&pageSize=25&sort=-price&q=cable&price_gte=20`), aborts superseded requests, debounces typing,
+and keeps the previous page on screen while the next loads. It expects `{ data: [...], total: n }`.
+That is exactly what [`Inandu.Grid.Extensions`](https://github.com/inandusolutions/inandu-grid-extensions)
+(.NET / EF Core) returns from one `ToInanduGrid()` call — [request contract](https://github.com/inandusolutions/inandu-grid-extensions/blob/main/docs/request-contract.md) —
+but any backend that speaks the same params works. Runnable example: [`examples/server-side`](examples/server-side).
+
+In `serverSide` mode grouping, tree data, virtual scroll, `extraRowFilter` and column aggregate
+totals are off (they would only ever see one page), and a column's Excel-style value checklist lists
+the values on the current page. Use `buildInanduGridQuery(query)` if you'd rather do the fetching
+yourself, and `fetcher` / `init` on the hook for auth headers or a custom client.
 
 ## Development
 

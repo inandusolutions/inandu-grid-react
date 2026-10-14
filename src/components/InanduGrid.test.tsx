@@ -780,3 +780,13 @@ describe('InanduGrid: cell range selection', () => {
     expect(container.querySelector('.inandu-cell-range-selected')).not.toBeInTheDocument();
   });
 });
+
+describe('<InanduGrid serverSide>', () => {
+  it('shows the rows it was given untouched, the server total in the pager, and no group-by control', () => {
+    render(<InanduGrid rows={rows} columns={columns} pageSize={2} serverSide={{ totalItems: 7 }} />);
+
+    expect(screen.getAllByText(/Beatriz|Ana/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Page 1 of 4 \(7\)/)).toBeTruthy();
+    expect(screen.queryByLabelText('Group by')).toBeNull();
+  });
+});

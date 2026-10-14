@@ -2,11 +2,19 @@ export { InanduGrid } from './components/InanduGrid';
 export type { InanduGridProps, InanduGridCellRangeSelection } from './components/InanduGrid';
 
 export { useInanduGrid } from './hooks/useInanduGrid';
+export { useInanduGridServer, buildInanduGridQuery } from './hooks/useInanduGridServer';
+export type {
+  InanduGridServerOptions,
+  InanduGridServerResult,
+  InanduGridQueryOptions,
+} from './hooks/useInanduGridServer';
+
 export type {
   InanduGridCellPaste,
   InanduGridColumn,
   InanduGridGroup,
   InanduGridRowSave,
+  InanduGridServerQuery,
   InanduGridSort,
   UseInanduGridOptions,
   InanduCellRenderContext,

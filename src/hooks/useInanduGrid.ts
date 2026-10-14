@@ -115,6 +115,19 @@ export interface InanduGridSort {
   direction: 'asc' | 'desc';
 }
 
+/**
+ * What `onQueryChange` emits in `serverSide` mode: the grid's whole request state, ready for
+ * `useInanduGridServer` (or a hand-rolled fetch) to turn into a query string. `page` is 0-based,
+ * like the hook's own `page`.
+ */
+export interface InanduGridServerQuery {
+  page: number;
+  pageSize: number;
+  sortCriteria: InanduGridSort[];
+  filterValues: Record<string, InanduGridColumnFilterValue>;
+  filterQuery: string;
+}
+
 /** One bucket of `useInanduGrid`'s `groups` — mirrors grid-angular's `groupedRows`. */
 export interface InanduGridGroup {
   /** The grouped column's *formatted* display value for every row in this bucket. */
@@ -173,6 +186,16 @@ export interface UseInanduGridOptions {
   virtualScroll?: boolean;
   /** An extra per-row predicate ANDed onto the free-text + column filters — same as grid-angular's `extraRowFilter`. Lets a caller layer its own filtering (e.g. an advanced-filter query) on top of the grid's own. Unset: no extra filtering. */
   extraRowFilter?: (row: InanduGridRow) => boolean;
+  /**
+   * Server-side mode: `rows` is already the current page, as sorted/filtered/paged by the server
+   * (see `useInanduGridServer`). The hook keeps owning the sort / filter / search / page *state* so
+   * `<InanduGrid>`'s controls work unchanged, but stops applying it to `rows` and reads the page
+   * count from `totalItems`. Grouping, tree data, virtual scroll, `extraRowFilter` and
+   * column-aggregate totals are not available (they would only see one page). Unset: client-side.
+   */
+  serverSide?: { totalItems: number };
+  /** `serverSide` only: called once on mount and again whenever page, sort, filters or search change. */
+  onQueryChange?: (query: InanduGridServerQuery) => void;
 }
 
 /**
@@ -201,12 +224,17 @@ export function useInanduGrid({
   singleDetailExpand = false,
   virtualScroll = false,
   extraRowFilter,
+  serverSide,
+  onQueryChange,
 }: UseInanduGridOptions) {
   const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
   const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
   const [filterQuery, setFilterQueryState] = useState('');
   const [page, setPage] = useState(0);
-  const [groupByField, setGroupByField] = useState<string | undefined>(undefined);
+  const [groupByState, setGroupByField] = useState<string | undefined>(undefined);
+  const isServerSide = !!serverSide;
+  // Grouping would only ever bucket the one page the server returned, so server mode turns it off.
+  const groupByField = isServerSide ? undefined : groupByState;
   const [selectedRows, setSelectedRows] = useState<Set<InanduGridRow>>(new Set());
   const [editingRow, setEditingRow] = useState<InanduGridRow | undefined>(undefined);
   const [isAddingRow, setIsAddingRow] = useState(false);
@@ -347,6 +375,7 @@ export function useInanduGrid({
 
   const sortedFilteredRows = useMemo(() => {
     let result = rows;
+    if (isServerSide) return result; // the server already searched, filtered and sorted
 
     // Free-text search: a row matches if ANY column's formatted display value contains the query
     // (case-insensitive) — same semantics as grid-angular's `filteredData`, applied before the
@@ -387,7 +416,7 @@ export function useInanduGrid({
     }
 
     return result;
-  }, [rows, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, locale, extraRowFilter]);
+  }, [rows, isServerSide, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, locale, extraRowFilter]);
 
   /**
    * `sortedFilteredRows` bucketed by the grouped column's *formatted* value, in first-seen order
@@ -421,7 +450,7 @@ export function useInanduGrid({
   );
 
   /** Tree mode is on, and grouping/virtual-scroll (its incompatible render paths in this port) aren't. */
-  const hasTreeData = !!treeChildrenKey && !groupByField && !virtualScroll;
+  const hasTreeData = !!treeChildrenKey && !groupByField && !virtualScroll && !isServerSide;
 
   function childrenOf(row: InanduGridRow): readonly InanduGridRow[] | undefined {
     const value = treeChildrenKey ? row[treeChildrenKey] : undefined;
@@ -532,21 +561,31 @@ export function useInanduGrid({
   }
 
   /** Virtualization is on, and grouping (this port's one incompatible combo — see the option's doc comment) isn't. */
-  const hasVirtualScroll = virtualScroll && !groupByField;
+  const hasVirtualScroll = virtualScroll && !groupByField && !isServerSide;
 
   // Grouping, tree mode, and virtualization all bypass pagination entirely, same as grid-angular —
   // none of them has a meaningful "page" (rows are bucketed by group, nested by parent/child, or
   // windowed by scroll position instead).
   const paginationActive = pageSize > 0 && !groupByField && !hasTreeData && !hasVirtualScroll;
-  const pageCount = paginationActive ? Math.max(1, Math.ceil(sortedFilteredRows.length / pageSize)) : 1;
-  const clampedPage = Math.min(page, pageCount - 1);
+  const totalRowCount = serverSide ? serverSide.totalItems : sortedFilteredRows.length;
+  const pageCount = paginationActive ? Math.max(1, Math.ceil(totalRowCount / pageSize)) : 1;
+  // Server mode keeps the raw page: `totalItems` is 0 while a request is in flight, and clamping
+  // against that would snap the user back to page 1 and fire a second request.
+  const clampedPage = isServerSide ? page : Math.min(page, pageCount - 1);
 
   const visibleRows = useMemo(() => {
     if (hasTreeData) return treeRows.map(t => t.row);
-    if (!paginationActive) return sortedFilteredRows;
+    if (!paginationActive || isServerSide) return sortedFilteredRows;
     const start = clampedPage * pageSize;
     return sortedFilteredRows.slice(start, start + pageSize);
-  }, [hasTreeData, treeRows, sortedFilteredRows, paginationActive, pageSize, clampedPage]);
+  }, [hasTreeData, treeRows, sortedFilteredRows, paginationActive, isServerSide, pageSize, clampedPage]);
+
+  const onQueryChangeRef = useRef(onQueryChange);
+  onQueryChangeRef.current = onQueryChange;
+  useEffect(() => {
+    if (!isServerSide) return;
+    onQueryChangeRef.current?.({ page: clampedPage, pageSize, sortCriteria, filterValues, filterQuery });
+  }, [isServerSide, clampedPage, pageSize, sortCriteria, filterValues, filterQuery]);
 
   /** Rows the "select all" checkbox governs — every group's rows when grouped, or just the current page otherwise (mirrors grid-angular's `pagedData()`/grouped `rows` distinction, minus its virtual-scroll case). */
   const selectionScopeRows = groupByField ? sortedFilteredRows : visibleRows;
@@ -952,7 +991,7 @@ export function useInanduGrid({
     exportRows: selectionScopeRows,
     /** Every row matching the current filter and sort, in sort order, regardless of pagination or grouping — same as grid-angular's `sortedData()`. Unlike `exportRows`, this never stops at one page: a full-dataset export/print reads from here instead. */
     sortedRows: sortedFilteredRows,
-    filteredRowCount: sortedFilteredRows.length,
+    filteredRowCount: totalRowCount,
     locale,
     sortCriteria,
     setSort: setSortCriteria,
