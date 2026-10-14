@@ -12,6 +12,7 @@ import {
 import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
+import type { InanduGridServerQuery } from '../hooks/useInanduGrid';
 import type { InanduCellRenderContext, InanduEditRenderContext, InanduHeaderRenderContext } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
 import { measureColumnContentWidth } from '../utils/measureColumn';
@@ -130,6 +131,10 @@ export interface InanduGridProps {
   singleDetailExpand?: boolean;
   /** An extra per-row predicate ANDed onto the free-text + column filters — same as grid-angular's `extraRowFilter`. Lets a caller layer its own filtering (e.g. an advanced-filter query) on top of the grid's own. Unset: no extra filtering. */
   extraRowFilter?: (row: InanduGridRow) => boolean;
+  /** Server-side mode: `rows` is the current page as sorted/filtered/paged by the server and `totalItems` is the full match count. See `useInanduGridServer`. Needs `pageSize` > 0. */
+  serverSide?: { totalItems: number };
+  /** `serverSide` only: called on mount and whenever page, sort, filters or search change. */
+  onQueryChange?: (query: InanduGridServerQuery) => void;
   /**
    * Opt-in row virtualization for large datasets — only rows scrolled into view (plus a small
    * overscan runway) are actually mounted. Bypasses pagination entirely, same as grouping.
@@ -196,6 +201,8 @@ export function InanduGrid({
   renderDetail,
   singleDetailExpand = false,
   extraRowFilter,
+  serverSide,
+  onQueryChange,
   virtualScroll = false,
   virtualRowHeight = 40,
   height = 400,
@@ -286,6 +293,8 @@ export function InanduGrid({
     singleDetailExpand,
     extraRowFilter,
     virtualScroll,
+    serverSide,
+    onQueryChange,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
@@ -406,7 +415,7 @@ export function InanduGrid({
   }
 
   const aggregateColumns = visibleColumns.filter(column => column.aggregate);
-  const groupableColumns = visibleColumns.filter(column => column.groupable !== false);
+  const groupableColumns = serverSide ? [] : visibleColumns.filter(column => column.groupable !== false); // grouping would only see the current server page
   const isEmpty = groups ? groups.length === 0 : visibleRows.length === 0;
   const hasRowActions = editableColumns.length > 0 || deletable || creatable;
   const hasRowDragHandle = rowReorder && !groupByField && !hasVirtualScroll;
