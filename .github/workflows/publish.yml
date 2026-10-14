@@ -1,0 +1,77 @@
+name: Publish to npm
+
+# Publishes @inandu-solutions/grid-react to npm via trusted publishing (OIDC) — no npm token, and
+# the package gets a provenance attestation.
+#
+# Runs on a pushed v* tag, or manually (Actions > Publish to npm > Run workflow) with the version
+# typed in.
+#
+# One-time setup, on npmjs.com > the package > Settings > Trusted Publisher > GitHub Actions:
+#   Organization or user: inandusolutions
+#   Repository:           inandu-grid-react
+#   Workflow filename:    publish.yml
+#
+# Release flow: bump "version" in package.json (npm version <x.y.z> --no-git-tag-version), merge
+# that PR, then `git tag vX.Y.Z && git push origin vX.Y.Z` from main.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish — must match "version" in package.json (e.g. 0.2.0)'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write   # required for npm trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "publishing=$VERSION  package.json=$PKG_VERSION"
+          if [ "$VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Version $VERSION does not match \"version\": \"$PKG_VERSION\" in package.json — bump it first."
+            exit 1
+          fi
+
+      # Node 22 ships npm 10.x; trusted publishing needs npm >= 11.5.1.
+      - name: Update npm
+        run: npm install -g npm@^11.5.1
+
+      - name: Check npm supports trusted publishing (>= 11.5.1)
+        run: |
+          npm --version
+          node -e "const [a,b,c]=process.argv[1].split('.').map(Number); if (a<11 || (a===11 && (b<5 || (b===5 && c<1)))) { console.error('npm >= 11.5.1 is required for trusted publishing'); process.exit(1); }" "$(npm --version)"
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish (provenance)
+        run: npm publish --provenance --access public
