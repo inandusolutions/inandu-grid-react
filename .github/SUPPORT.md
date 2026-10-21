@@ -7,6 +7,8 @@ Ways to get help with `@inandu-solutions/grid-react`:
 - **Live demo and examples** — <https://inandusolutions.github.io/inandu-grid-react/>
 - **Angular version** — [`inandu-grid`](https://github.com/inandusolutions/inandu-grid) and its
   [user manual](https://inandusolutions.github.io/inandu-grid/manual.html)
+- **Vue version** — [`inandu-grid-vue`](https://github.com/inandusolutions/inandu-grid-vue) and its
+  [live demo](https://inandusolutions.github.io/inandu-grid-vue/)
 - **Security reports** — see [SECURITY.md](SECURITY.md); please don't open a public issue
 
 For commercial support and the `@inandu-solutions/grid-pro-react` add-ons, see <https://www.inandu.com>.
