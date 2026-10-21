@@ -47,8 +47,9 @@ npm run build        # library build -> dist/ (also copies dist/style.css)
   `vitest` + `@testing-library/react`, not shallow rendering)
 - [ ] Updated the README's Features list if the public API changed
 - [ ] If you touched core logic (sorting, filtering, aggregation, export, i18n), check whether the
-  same change applies to the [Angular version](https://github.com/inandusolutions/inandu-grid) —
-  the two cores are kept in sync by hand, not shared via a package
+  same change applies to the [Angular](https://github.com/inandusolutions/inandu-grid) and
+  [Vue](https://github.com/inandusolutions/inandu-grid-vue) versions — the cores are kept in sync by
+  hand, not shared via a package
 
 ## Commit messages
 

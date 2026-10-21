@@ -168,6 +168,9 @@ export function App() {
             <a className="btn" href="https://github.com/inandusolutions/inandu-grid">
               Angular version
             </a>
+            <a className="btn" href="https://github.com/inandusolutions/inandu-grid-vue">
+              Vue version
+            </a>
           </div>
         </div>
       </section>
@@ -181,6 +184,7 @@ export function App() {
             <a href="https://github.com/inandusolutions/inandu-grid-react">GitHub</a>
             <a href="https://www.npmjs.com/package/@inandu-solutions/grid-react">npm</a>
             <a href="https://github.com/inandusolutions/inandu-grid">Angular version</a>
+            <a href="https://github.com/inandusolutions/inandu-grid-vue">Vue version</a>
           </div>
         </div>
       </footer>
