@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { InanduGrid } from '@inandu-solutions/grid-react';
 import type { InanduGridColumn, InanduGridRow } from '@inandu-solutions/grid-react';
+import { FeatureExplorer } from './FeatureExplorer';
+import { highlight } from './highlight';
+import type { DemoTab } from './features';
 
 const NPM_INSTALL = 'npm install @inandu-solutions/grid-react';
 
@@ -17,38 +20,14 @@ const USE_IT_SNIPPET = `import { InanduGrid } from '@inandu-solutions/grid-react
   pageSize={25}
 />;`;
 
-const FEATURES: { title: string; body: string }[] = [
-  {
-    title: 'Sorting & filtering',
-    body: 'Single- or multi-column sort (shift-click), free-text search across every column, and per-column filter controls that match each column’s type.',
-  },
-  {
-    title: 'Grouping & aggregates',
-    body: 'Group by any column and see live sum / avg / min / max / count per group and grand totals — no extra wiring.',
-  },
-  {
-    title: 'CSV / Excel / PDF export',
-    body: 'One toolbar exports the visible rows. jspdf is lazy-loaded, so you only pay for the PDF path if someone uses it.',
-  },
-  {
-    title: 'Inline editing',
-    body: 'Per-column editable, with required / min / max / pattern and async validators checked at save time. Create and delete rows too.',
-  },
-  {
-    title: 'Columns, your way',
-    body: 'Resize, reorder, pin left or right, show/hide, and double-click a handle to autosize to content.',
-  },
-  {
-    title: 'i18n & headless',
-    body: 'English, Spanish, French, Italian and Chinese bundled. Don’t like the markup? useInanduGrid() gives you the state and none of the JSX.',
-  },
-];
-
-type DemoTab = 'basics' | 'editing' | 'tree';
-
 export function App() {
   const [tab, setTab] = useState<DemoTab>('basics');
   const [copied, setCopied] = useState(false);
+
+  const openDemo = (t: DemoTab) => {
+    setTab(t);
+    document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const copyInstall = () => {
     navigator.clipboard?.writeText(NPM_INSTALL).then(() => {
@@ -82,8 +61,12 @@ export function App() {
 
       <header className="hero" id="top">
         <div className="wrap">
-          <span className="badge">MIT licensed &middot; React 18 / 19 &middot; no enterprise tier</span>
-          <h1>The React data grid with nothing behind a paywall.</h1>
+          <span className="badge">
+            <i className="dot" aria-hidden="true" />
+            MIT licensed &middot; React 18 / 19 &middot; no enterprise tier</span>
+          <h1>
+            The React data grid with <span className="hl">nothing behind a paywall</span>.
+          </h1>
           <p className="lede">
             Sorting, filtering, grouping, virtual scroll, inline editing and CSV / Excel / PDF export — every
             feature on this page is free and open source. A component and a headless hook, both from day one.
@@ -108,6 +91,7 @@ export function App() {
 
       <section id="demo">
         <div className="wrap">
+          <span className="eyebrow">Live demo</span>
           <h2>See it working</h2>
           <p className="demo-note">Not screenshots — the real component, running here.</p>
 
@@ -121,33 +105,39 @@ export function App() {
             <button className={`tab ${tab === 'tree' ? 'active' : ''}`} onClick={() => setTab('tree')} type="button">
               Tree data
             </button>
+            <button className={`tab ${tab === 'virtual' ? 'active' : ''}`} onClick={() => setTab('virtual')} type="button">
+              10,000 rows
+            </button>
+            <button className={`tab ${tab === 'slots' ? 'active' : ''}`} onClick={() => setTab('slots')} type="button">
+              Custom cells &amp; detail
+            </button>
           </div>
 
           <div className="demo-panel">
             {tab === 'basics' && <BasicsDemo />}
             {tab === 'editing' && <EditingDemo />}
             {tab === 'tree' && <TreeDemo />}
+            {tab === 'virtual' && <VirtualDemo />}
+            {tab === 'slots' && <SlotsDemo />}
           </div>
         </div>
       </section>
 
-      <section id="features">
+      <section id="features" className="band">
         <div className="wrap">
-          <h2>Features</h2>
-          <div className="feature-grid">
-            {FEATURES.map(f => (
-              <div className="feature-card" key={f.title}>
-                <h3>{f.title}</h3>
-                <p>{f.body}</p>
-              </div>
-            ))}
-          </div>
+          <span className="eyebrow">Features</span>
+          <h2>Everything on the list, free</h2>
+          <p className="section-lede">
+            Pick a feature to see the code that turns it on. The real prop and callback names — copy, paste, done.
+          </p>
+          <FeatureExplorer onOpenDemo={openDemo} />
         </div>
       </section>
 
       <section id="start">
         <div className="wrap">
-          <h2>Get started</h2>
+          <span className="eyebrow">Get started</span>
+          <h2>Two steps and a grid</h2>
           <div className="start-grid">
             <div>
               <h3>1 &middot; Install</h3>
@@ -155,7 +145,7 @@ export function App() {
             </div>
             <div>
               <h3>2 &middot; Use it</h3>
-              <pre className="code-block">{USE_IT_SNIPPET}</pre>
+              <pre className="code-block" dangerouslySetInnerHTML={{ __html: highlight(USE_IT_SNIPPET) }} />
             </div>
           </div>
           <div className="start-buttons">
@@ -293,6 +283,68 @@ function TreeDemo() {
         Nested rows via <code>treeChildrenKey</code> &middot; click a row to expand/collapse it.
       </p>
       <InanduGrid rows={rows} columns={treeColumns} treeChildrenKey="reports" treeDefaultExpanded="all" lang="en" />
+    </>
+  );
+}
+
+function buildOrders(n: number): InanduGridRow[] {
+  const status = ['Paid', 'Pending', 'Shipped', 'Refunded'];
+  return Array.from({ length: n }, (_, i) => ({
+    id: i + 1,
+    customer: `${FIRST[i % FIRST.length]} ${LAST[(i * 7) % LAST.length]}`,
+    status: status[(i * 13) % status.length],
+    total: 20 + ((i * 7919) % 48000) / 100,
+    placed: new Date(2024, i % 12, 1 + (i % 27)),
+  }));
+}
+
+const orderColumns: InanduGridColumn[] = [
+  { field: 'id', headerText: '#', type: 'number', width: 90 },
+  { field: 'customer', headerText: 'Customer' },
+  { field: 'status', headerText: 'Status' },
+  { field: 'total', headerText: 'Total', type: 'number', format: '1.2-2' },
+  { field: 'placed', headerText: 'Placed', type: 'date', format: 'DD/MM/YYYY' },
+];
+
+function VirtualDemo() {
+  const [rows] = useState(() => buildOrders(10000));
+  return (
+    <>
+      <p className="demo-note" style={{ marginBottom: '1rem' }}>
+        10,000 rows with <code>virtualScroll</code> &middot; only the visible ones are in the DOM &middot; sort, search and
+        filter still work.
+      </p>
+      <InanduGrid rows={rows} columns={orderColumns} virtualScroll virtualRowHeight={40} height={380} lang="en" />
+    </>
+  );
+}
+
+const slotColumns: InanduGridColumn[] = orderColumns.map(c =>
+  c.field === 'status'
+    ? { ...c, renderCell: ({ value }) => <span className={`pill pill-${String(value).toLowerCase()}`}>{String(value)}</span> }
+    : c,
+);
+
+function SlotsDemo() {
+  const [rows] = useState(() => buildOrders(40));
+  return (
+    <>
+      <p className="demo-note" style={{ marginBottom: '1rem' }}>
+        A column&apos;s <code>renderCell</code> swaps the plain text for a badge &middot; <code>renderDetail</code> adds an
+        expandable row.
+      </p>
+      <InanduGrid
+        rows={rows}
+        columns={slotColumns}
+        pageSize={8}
+        lang="en"
+        renderDetail={row => (
+          <div className="detail-card">
+            <strong>Order #{String(row.id)}</strong> for {String(row.customer)} &mdash; ${Number(row.total).toFixed(2)}, currently{' '}
+            <em>{String(row.status).toLowerCase()}</em>.
+          </div>
+        )}
+      />
     </>
   );
 }
