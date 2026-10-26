@@ -78,7 +78,11 @@ export interface InanduHeaderRenderContext {
   field: string;
 }
 
-/** Passed to a column's `renderEditor`. `row` is `{}` for the add-new-row draft. */
+/**
+ * Passed to a column's `renderEditor`. `row` is `{}` for the add-new-row draft.
+ *
+ * Because `value` is always the raw control shape, a cell that holds an array or an object arrives as text (`String(raw)`: `['a','b']` becomes `"a,b"`, `{ ... }` becomes `"[object Object]"`). Store such values as strings (comma-joined, `from..to`, ...) and let the editor parse and format them - as grid-pro's multiselect (`joinWith`) and date-range (`sep`) editors do - or read the original typed value from `row[field]`.
+ */
 export interface InanduEditRenderContext {
   value: unknown;
   row: InanduGridRow;
