@@ -137,12 +137,58 @@ function Detail() {
   );
 }
 
+
+const interactionColumns: InanduGridColumn[] = [
+  { field: 'name', headerText: 'Name', pinned: 'left', width: 200, editable: true },
+  { field: 'team', headerText: 'Team', width: 320 },
+  { field: 'role', headerText: 'Role', width: 320 },
+  { field: 'salary', headerText: 'Salary', type: 'number', format: '1.0-0', width: 320 },
+  { field: 'joined', headerText: 'Joined', type: 'date', format: 'DD/MM/YYYY', width: 320 },
+];
+
+function Interactions() {
+  const [rows, setRows] = useState(() => people().slice(0, 6));
+  const [log, setLog] = useState('');
+  return (
+    <>
+      <InanduGrid
+        rows={rows}
+        columns={interactionColumns}
+        clipboard
+        cellRangeSelection
+        rowReorder
+        autosize
+        lang="en"
+        onRowOrderChange={next => {
+          setRows(next);
+          setLog(`order:${next.map(r => String(r['id'])).join(',')}`);
+        }}
+        onCellsPaste={updates => {
+          setRows(rs => rs.map(r => {
+            const mine = updates.filter(u => u.row === r);
+            return mine.length ? { ...r, ...Object.fromEntries(mine.map(u => [u.field, u.value])) } : r;
+          }));
+          setLog(`paste:${updates.length}`);
+        }}
+      />
+      <output data-testid="log">{log}</output>
+    </>
+  );
+}
+
+function Spanish() {
+  const [rows] = useState(() => people().slice(0, 8));
+  return <InanduGrid rows={rows} columns={editColumns} exportable creatable deletable lang="es" />;
+}
+
 const SCENARIOS: Record<string, () => ReactElement> = {
   basics: Basics,
   editing: Editing,
   tree: Tree,
   virtual: Virtual,
   detail: Detail,
+  interactions: Interactions,
+  es: Spanish,
 };
 
 function App() {
