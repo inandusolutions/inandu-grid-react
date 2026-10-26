@@ -107,7 +107,7 @@ covers:
 - Master-detail (`renderDetail`)
 - Custom cell / header / edit-control rendering per column (`renderCell` / `renderHeader` /
   `renderEditor`) — drop in your own component in place of the built-in formatted text, header
-  label, or edit-mode input, without losing sorting, resizing, or validation
+  label, or edit-mode input, without losing sorting, resizing, or validation. Note: the editor's `value` is always the raw control shape (text), so keep array/object cell values as delimited strings (or read `row[field]`) - see `InanduEditRenderContext`.
 - Excel-style cell range selection (`cellRangeSelection`, `multiRange`) — click-and-drag or
   shift-click across cells to select a rectangular block; `Ctrl+C` copies the whole range as TSV
   when `clipboard` is also on
