@@ -31,6 +31,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
   e2e:
     runs-on: ubuntu-latest
     # The Chromium/apt download occasionally stalls on GitHub's runners; fail fast instead of hanging.
@@ -69,3 +72,47 @@ jobs:
           path: playwright-report/
           retention-days: 7
           if-no-files-found: ignore
+
+  # The framework-agnostic core (src/core) and the server-queries contract fixture are copied by
+  # hand from other repos. This job fails when a copy drifts. To resync: copy the files over, then
+  # bump the pinned refs below (GRID_REF / EXT_REF) to the commits you synced from.
+  core-sync:
+    runs-on: ubuntu-latest
+    env:
+      GRID_REF: cf813d3a5c763f5d9e525bb92ccf2050f18dfcbc   # inandusolutions/inandu-grid
+      EXT_REF: f6f60dca666e6796475bd2478386ff82d8a51934    # inandusolutions/inandu-grid-extensions
+      FIXTURE: src/hooks/contract/server-queries.json
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/checkout@v7
+        with:
+          repository: inandusolutions/inandu-grid
+          ref: ${{ env.GRID_REF }}
+          path: _upstream/grid
+
+      - uses: actions/checkout@v7
+        with:
+          repository: inandusolutions/inandu-grid-extensions
+          ref: ${{ env.EXT_REF }}
+          path: _upstream/extensions
+
+      - name: Compare src/core with inandu-grid
+        run: |
+          UP=_upstream/grid/projects/inandu-grid/src/lib/core
+          # index.ts differs only in its leading comment block; the specs are per-framework.
+          strip() { sed 's/\r$//' "$1" | awk 'BEGIN{h=1} h&&/\*\//{h=0; next} !h{print}'; }
+          status=0
+          for f in $(cd "$UP" && find . -type f ! -name 'core.spec.ts' ! -name 'index.ts' | sort); do
+            if [ ! -f "src/core/$f" ]; then echo "::error::missing src/core/$f"; status=1; continue; fi
+            if ! diff -u <(sed 's/\r$//' "$UP/$f") <(sed 's/\r$//' "src/core/$f") >/dev/null; then echo "::error::src/core/$f differs from inandu-grid"; diff -u <(sed 's/\r$//' "$UP/$f") <(sed 's/\r$//' "src/core/$f") | head -40; status=1; fi
+          done
+          (cd src/core && find . -type f ! -name 'core.spec.ts' ! -name 'core.smoke.test.ts' ! -name 'index.ts' | sort) | while read -r f; do
+            [ -f "$UP/$f" ] || { echo "::error::src/core/$f does not exist in inandu-grid"; exit 1; }
+          done || status=1
+          if ! diff -u <(strip "$UP/index.ts") <(strip src/core/index.ts) >/dev/null; then echo "::error::src/core/index.ts exports differ from inandu-grid"; diff -u <(strip "$UP/index.ts") <(strip src/core/index.ts) | head -40; status=1; fi
+          exit $status
+
+      - name: Compare server-queries.json with inandu-grid-extensions
+        run: |
+          diff -u <(sed 's/\r$//' _upstream/extensions/tests/Inandu.Grid.Extensions.Tests/Contract/server-queries.json) <(sed 's/\r$//' "$FIXTURE")
