@@ -31,6 +31,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
   e2e:
     runs-on: ubuntu-latest
     # The Chromium/apt download occasionally stalls on GitHub's runners; fail fast instead of hanging.
