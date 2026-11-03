@@ -11,4 +11,15 @@ entries below start from the next release.
 
 _Nothing yet_
 
-[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.1...HEAD
+## [0.2.2] - 2026-11-03
+
+### Fixed
+
+- `package.json` now declares `sideEffects: ["*.css"]` instead of `false`, so bundlers (webpack, Rollup, Vite production builds) no longer tree-shake away `style.css` when it is imported for its side effects.
+
+### Documentation
+
+- `InanduEditRenderContext`: document that `renderEditor` receives the raw control shape, so arrays and objects arrive as text, and how to handle them.
+
+[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.1...v0.2.2
