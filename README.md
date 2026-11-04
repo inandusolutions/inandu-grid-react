@@ -167,6 +167,21 @@ totals are off (they would only ever see one page), and a column's Excel-style v
 the values on the current page. Use `buildInanduGridQuery(query)` if you'd rather do the fetching
 yourself, and `fetcher` / `init` on the hook for auth headers or a custom client.
 
+### Row identity (`rowId`)
+
+Selection, tree expansion and master-detail expansion are remembered **by a key**, not by the row object,
+so they survive a page change, a `reload()` and a parent that passes a derived array (`rows={data.filter(...)}`).
+By default the key is the row's `id` field when it has one; otherwise the row object itself (the previous
+behaviour). Point it somewhere else with `rowId`:
+
+```tsx
+<InanduGrid rows={rows} columns={columns} rowId="sku" />
+<InanduGrid rows={rows} columns={columns} rowId={row => `${row.orderId}-${row.line}`} />
+```
+
+The key is also the React `key` of each row, so edit state follows a row through sorting, filtering and
+drag-reorder. Give rows a unique key: duplicate ids are your data's problem and React will warn about them.
+
 ## Development
 
 ```bash

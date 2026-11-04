@@ -1,3 +1,5 @@
+import { createRowKey, toReactKey } from './rowKey';
+import type { InanduGridRowId } from './rowKey';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ColumnConfig,
@@ -191,6 +193,13 @@ export interface UseInanduGridOptions {
   /** An extra per-row predicate ANDed onto the free-text + column filters — same as grid-angular's `extraRowFilter`. Lets a caller layer its own filtering (e.g. an advanced-filter query) on top of the grid's own. Unset: no extra filtering. */
   extraRowFilter?: (row: InanduGridRow) => boolean;
   /**
+   * How a row is identified across data refreshes: a field name (`'sku'`) or a function returning the key.
+   * Selection, tree expansion and master-detail expansion are remembered by this key, so they survive a
+   * server-side page change or `reload()` (which return new row objects) and a parent that passes a derived
+   * array. Unset: the row's `id` field when it has one, otherwise the row object itself (identity), as before.
+   */
+  rowId?: InanduGridRowId;
+  /**
    * Server-side mode: `rows` is already the current page, as sorted/filtered/paged by the server
    * (see `useInanduGridServer`). The hook keeps owning the sort / filter / search / page *state* so
    * `<InanduGrid>`'s controls work unchanged, but stops applying it to `rows` and reads the page
@@ -228,6 +237,7 @@ export function useInanduGrid({
   singleDetailExpand = false,
   virtualScroll = false,
   extraRowFilter,
+  rowId,
   serverSide,
   onQueryChange,
 }: UseInanduGridOptions) {
@@ -239,7 +249,10 @@ export function useInanduGrid({
   const isServerSide = !!serverSide;
   // Grouping would only ever bucket the one page the server returned, so server mode turns it off.
   const groupByField = isServerSide ? undefined : groupByState;
-  const [selectedRows, setSelectedRows] = useState<Set<InanduGridRow>>(new Set());
+  const keyOf = useMemo(() => createRowKey(rowId), [rowId]);
+  // Selection remembers each selected row by its key; the stored object is refreshed whenever the same key shows up in `rows`.
+  const [selectedByKey, setSelectedByKey] = useState<Map<unknown, InanduGridRow>>(new Map());
+  const selectedRows = useMemo(() => new Set(selectedByKey.values()), [selectedByKey]);
   const [editingRow, setEditingRow] = useState<InanduGridRow | undefined>(undefined);
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [rowDraft, setRowDraft] = useState<Record<string, unknown>>({});
@@ -251,9 +264,10 @@ export function useInanduGrid({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [pinnedOverrides, setPinnedOverrides] = useState<Record<string, InanduColumnStickySide | 'none'>>({});
   const [draggingRow, setDraggingRow] = useState<InanduGridRow | undefined>(undefined);
-  const [expandedTreeRows, setExpandedTreeRows] = useState<Set<InanduGridRow>>(new Set());
-  const [expandedRows, setExpandedRows] = useState<Set<InanduGridRow>>(new Set());
-  const treeSeededForRef = useRef<InanduGridRow[] | undefined>(undefined);
+  const [expandedTreeRows, setExpandedTreeRows] = useState<Set<unknown>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<unknown>>(new Set());
+  // Keys of the tree nodes already offered the default expansion: a node is seeded once, when it first shows up.
+  const treeSeenRef = useRef<Set<unknown>>(new Set());
 
   const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
 
@@ -504,49 +518,61 @@ export function useInanduGrid({
           }
         : undefined;
 
-    return flattenTree(rows, { getChildren: childrenOf, isExpanded: row => expandedTreeRows.has(row), match: matches, compare });
-  }, [hasTreeData, rows, treeChildrenKey, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, expandedTreeRows, locale, extraRowFilter]);
+    return flattenTree(rows, { getChildren: childrenOf, isExpanded: row => expandedTreeRows.has(keyOf(row)), match: matches, compare });
+  }, [hasTreeData, rows, treeChildrenKey, visibleColumns, columnConfigs, filterQuery, filterValues, sortCriteria, expandedTreeRows, locale, extraRowFilter, keyOf]);
 
-  // Seeds `expandedTreeRows` from `treeDefaultExpanded` the first time a given `rows` array is
-  // seen — same "once per distinct data(), not on every re-render" behavior grid-angular's own
-  // seeding effect has (a user's own subsequent expand/collapse clicks must survive re-renders).
+  // Seeds the default expansion (`treeDefaultExpanded`) for a node the first time its key appears.
+  // A node that was already seen keeps whatever the user did to it, so a refetch, a server page change
+  // or a parent that passes a derived `rows` array on every render no longer undoes expand / collapse.
   useEffect(() => {
-    if (!hasTreeData || treeSeededForRef.current === rows) return;
-    treeSeededForRef.current = rows;
-    if (treeDefaultExpanded === 'none') {
-      setExpandedTreeRows(new Set());
-      return;
-    }
-    const next = new Set<InanduGridRow>();
+    if (!hasTreeData) return;
+    const seen = treeSeenRef.current;
+    const wanted = new Set<unknown>();
     if (treeDefaultExpanded === 'all') {
       for (const row of collectTreeRows(rows, childrenOf)) {
-        if (childrenOf(row)?.length) next.add(row);
+        if (childrenOf(row)?.length) wanted.add(keyOf(row));
       }
-    } else {
+    } else if (treeDefaultExpanded !== 'none') {
       const walk = (level: readonly InanduGridRow[], depth: number): void => {
         if (depth >= treeDefaultExpanded) return;
         for (const row of level) {
           const kids = childrenOf(row);
           if (kids?.length) {
-            next.add(row);
+            wanted.add(keyOf(row));
             walk(kids, depth + 1);
           }
         }
       };
       walk(rows, 0);
     }
-    setExpandedTreeRows(next);
-  }, [hasTreeData, rows, treeDefaultExpanded]);
+
+    const fresh: unknown[] = [];
+    for (const row of collectTreeRows(rows, childrenOf)) {
+      const key = keyOf(row);
+      if (!seen.has(key)) {
+        seen.add(key);
+        if (wanted.has(key)) fresh.push(key);
+      }
+    }
+    if (fresh.length > 0) {
+      setExpandedTreeRows(open => {
+        const next = new Set(open);
+        for (const key of fresh) next.add(key);
+        return next;
+      });
+    }
+  }, [hasTreeData, rows, treeDefaultExpanded, keyOf]);
 
   function isTreeRowExpanded(row: InanduGridRow): boolean {
-    return expandedTreeRows.has(row);
+    return expandedTreeRows.has(keyOf(row));
   }
 
   function toggleTreeRow(row: InanduGridRow): void {
+    const key = keyOf(row);
     setExpandedTreeRows(open => {
       const next = new Set(open);
-      if (next.has(row)) next.delete(row);
-      else next.add(row);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -557,9 +583,9 @@ export function useInanduGrid({
       setExpandedTreeRows(new Set());
       return;
     }
-    const next = new Set<InanduGridRow>();
+    const next = new Set<unknown>();
     for (const row of collectTreeRows(rows, childrenOf)) {
-      if (childrenOf(row)?.length) next.add(row);
+      if (childrenOf(row)?.length) next.add(keyOf(row));
     }
     setExpandedTreeRows(next);
   }
@@ -594,37 +620,60 @@ export function useInanduGrid({
   /** Rows the "select all" checkbox governs — every group's rows when grouped, or just the current page otherwise (mirrors grid-angular's `pagedData()`/grouped `rows` distinction, minus its virtual-scroll case). */
   const selectionScopeRows = groupByField ? sortedFilteredRows : visibleRows;
 
+  /** A unique, stable React `key` for `row` (follows the row through sorting, filtering and drag-reorder). */
+  function rowReactKey(row: InanduGridRow): string {
+    return toReactKey(keyOf(row));
+  }
+
   function isRowSelected(row: InanduGridRow): boolean {
-    return selectedRows.has(row);
+    return selectedByKey.has(keyOf(row));
   }
 
   function toggleRowSelection(row: InanduGridRow): void {
-    setSelectedRows(prev => {
-      const next = new Set(prev);
-      if (next.has(row)) next.delete(row);
-      else next.add(row);
+    const key = keyOf(row);
+    setSelectedByKey(prev => {
+      const next = new Map(prev);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, row);
       return next;
     });
   }
 
-  const allSelected = selectionScopeRows.length > 0 && selectionScopeRows.every(row => selectedRows.has(row));
-  const someSelected = !allSelected && selectionScopeRows.some(row => selectedRows.has(row));
+  const allSelected = selectionScopeRows.length > 0 && selectionScopeRows.every(row => selectedByKey.has(keyOf(row)));
+  const someSelected = !allSelected && selectionScopeRows.some(row => selectedByKey.has(keyOf(row)));
 
   function toggleSelectAll(): void {
     const selectAll = !allSelected;
-    setSelectedRows(prev => {
-      const next = new Set(prev);
+    setSelectedByKey(prev => {
+      const next = new Map(prev);
       for (const row of selectionScopeRows) {
-        if (selectAll) next.add(row);
-        else next.delete(row);
+        if (selectAll) next.set(keyOf(row), row);
+        else next.delete(keyOf(row));
       }
       return next;
     });
   }
 
   function clearSelection(): void {
-    setSelectedRows(new Set());
+    setSelectedByKey(new Map());
   }
+
+  // A refetch returns new objects for the same rows: keep the selection, but hand out the fresh object.
+  useEffect(() => {
+    setSelectedByKey(prev => {
+      if (prev.size === 0) return prev;
+      let next: Map<unknown, InanduGridRow> | undefined;
+      const candidates = hasTreeData ? collectTreeRows(rows, childrenOf) : rows;
+      for (const row of candidates) {
+        const key = keyOf(row);
+        if (prev.has(key) && prev.get(key) !== row) {
+          next ??= new Map(prev);
+          next.set(key, row);
+        }
+      }
+      return next ?? prev;
+    });
+  }, [rows, hasTreeData, keyOf]);
 
   /**
    * The sort header's click handler. A plain click always collapses the sort to just `field`
@@ -885,15 +934,16 @@ export function useInanduGrid({
   }
 
   function isRowExpanded(row: InanduGridRow): boolean {
-    return expandedRows.has(row);
+    return expandedRows.has(keyOf(row));
   }
 
   /** Toggles `row`'s master-detail visibility. Multiple rows can be expanded at once by default; `singleDetailExpand` collapses any other expanded row first, accordion-style. Same semantics as grid-angular's `toggleRowExpanded`. */
   function toggleRowExpanded(row: InanduGridRow): void {
+    const key = keyOf(row);
     setExpandedRows(expanded => {
-      const next = singleDetailExpand ? new Set<InanduGridRow>() : new Set(expanded);
-      if (expanded.has(row)) next.delete(row);
-      else next.add(row);
+      const next = singleDetailExpand ? new Set<unknown>() : new Set(expanded);
+      if (expanded.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -1015,6 +1065,7 @@ export function useInanduGrid({
     groups,
     totals,
     selectedRows,
+    rowReactKey,
     isRowSelected,
     toggleRowSelection,
     allSelected,

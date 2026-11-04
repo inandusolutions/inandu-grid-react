@@ -39,3 +39,5 @@ export { createTranslator, interpolate } from './utils/translate';
 export type { InanduGridMessageKey } from './utils/translate';
 export { exportCsv, exportExcel, exportPdf, printTable, buildCsv, buildExcelXml } from './utils/exporters';
 export { measureColumnContentWidth } from './utils/measureColumn';
+
+export type { InanduGridRowId } from './hooks/rowKey';

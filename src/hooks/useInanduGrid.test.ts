@@ -128,3 +128,101 @@ describe('useInanduGrid: runtime column pin/unpin', () => {
     expect(result.current.columnPinnedSide('name')).toBeUndefined();
   });
 });
+
+describe('useInanduGrid: rowId', () => {
+  const cols = [{ field: 'name', headerText: 'Name' }];
+  const page1 = () => [
+    { id: 1, name: 'Ada' },
+    { id: 2, name: 'Alan' },
+  ];
+
+  it('keeps the selection when a refetch returns new objects for the same rows', () => {
+    const { result, rerender } = renderHook(({ data }) => useInanduGrid({ rows: data, columns: cols }), { initialProps: { data: page1() } });
+    act(() => result.current.toggleRowSelection(result.current.visibleRows[0]));
+    expect(result.current.selectedRows.size).toBe(1);
+
+    const fresh = [
+      { id: 1, name: 'Ada (edited)' },
+      { id: 2, name: 'Alan' },
+    ];
+    rerender({ data: fresh });
+
+    expect(result.current.isRowSelected(fresh[0])).toBe(true);
+    expect([...result.current.selectedRows][0]).toBe(fresh[0]); // the fresh object, not the stale one
+  });
+
+  it('keeps selected rows that are no longer in the current page', () => {
+    const { result, rerender } = renderHook(({ data }) => useInanduGrid({ rows: data, columns: cols }), { initialProps: { data: page1() } });
+    act(() => result.current.toggleRowSelection(result.current.visibleRows[0]));
+
+    rerender({ data: [{ id: 3, name: 'Grace' }] });
+
+    expect(result.current.selectedRows.size).toBe(1);
+    expect([...result.current.selectedRows][0]).toMatchObject({ id: 1 });
+  });
+
+  it('uses the field or function given as rowId', () => {
+    const data = [{ sku: 'A', name: 'x' }];
+    const byField = renderHook(() => useInanduGrid({ rows: data, columns: cols, rowId: 'sku' }));
+    act(() => byField.result.current.toggleRowSelection(data[0]));
+    expect(byField.result.current.isRowSelected({ sku: 'A', name: 'other object' })).toBe(true);
+
+    const byFn = renderHook(() => useInanduGrid({ rows: data, columns: cols, rowId: r => String(r['sku']) + '!' }));
+    act(() => byFn.result.current.toggleRowSelection(data[0]));
+    expect(byFn.result.current.isRowSelected({ sku: 'A' })).toBe(true);
+    expect(byFn.result.current.isRowSelected({ sku: 'B' })).toBe(false);
+  });
+
+  it('falls back to object identity when rows have no id', () => {
+    const data = [{ name: 'Ada' }, { name: 'Ada' }];
+    const { result } = renderHook(() => useInanduGrid({ rows: data, columns: cols }));
+    act(() => result.current.toggleRowSelection(data[0]));
+
+    expect(result.current.isRowSelected(data[0])).toBe(true);
+    expect(result.current.isRowSelected(data[1])).toBe(false);
+  });
+
+  it('gives unique React keys, even without ids or with an id equal to an index', () => {
+    const data = [{ name: 'a' }, { name: 'b' }, { id: 1, name: 'c' }, { id: '1', name: 'd' }];
+    const { result } = renderHook(() => useInanduGrid({ rows: data, columns: cols }));
+
+    const keys = data.map(r => result.current.rowReactKey(r));
+    expect(new Set(keys).size).toBe(4);
+    expect(result.current.rowReactKey(data[0])).toBe(keys[0]); // stable for the same object
+  });
+
+  it('does not undo the user’s tree expand/collapse when the parent passes a new derived array', () => {
+    const make = () => [
+      { id: 1, name: 'root', kids: [{ id: 2, name: 'child' }] },
+      { id: 3, name: 'root2', kids: [{ id: 4, name: 'child2' }] },
+    ];
+    const { result, rerender } = renderHook(({ data }) => useInanduGrid({ rows: data, columns: cols, treeChildrenKey: 'kids', treeDefaultExpanded: 'all' }), {
+      initialProps: { data: make() },
+    });
+    expect(result.current.visibleRows.length).toBe(4);
+
+    act(() => result.current.toggleTreeRow(result.current.visibleRows[0])); // collapse root
+    expect(result.current.visibleRows.length).toBe(3);
+
+    rerender({ data: make() }); // same ids, brand new objects (a derived array)
+
+    expect(result.current.visibleRows.length).toBe(3); // still collapsed
+  });
+
+  it('expands newly arrived tree nodes by the default, leaving the others alone', () => {
+    const { result, rerender } = renderHook(({ data }) => useInanduGrid({ rows: data, columns: cols, treeChildrenKey: 'kids', treeDefaultExpanded: 'all' }), {
+      initialProps: { data: [{ id: 1, name: 'root', kids: [{ id: 2, name: 'child' }] }] },
+    });
+    act(() => result.current.toggleTreeRow(result.current.visibleRows[0])); // collapse 1
+    expect(result.current.visibleRows.length).toBe(1);
+
+    rerender({
+      data: [
+        { id: 1, name: 'root', kids: [{ id: 2, name: 'child' }] },
+        { id: 5, name: 'new', kids: [{ id: 6, name: 'new child' }] },
+      ],
+    });
+
+    expect(result.current.visibleRows.length).toBe(3); // root collapsed (1) + new root + its child
+  });
+});
