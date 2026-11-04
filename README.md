@@ -3,8 +3,12 @@
 **A lightweight React data grid with the essentials other grids gate behind a paid enterprise
 licence — row grouping, aggregates, inline editing and Excel-compatible export — fully MIT.** The
 React port of [`@inandu-solutions/grid-angular`](https://github.com/inandusolutions/inandu-grid),
-sharing its core, kept in sync by hand (and with its Vue sibling,
-[`@inandu-solutions/grid-vue`](https://github.com/inandusolutions/inandu-grid-vue)).
+on the same framework-agnostic core
+([`@inandu-solutions/grid-core`](https://github.com/inandusolutions/inandu-grid-core)) as its Angular and
+Vue siblings: one core, three interfaces
+([how it fits together](https://inandusolutions.github.io/inandu-grid-react/architecture.html)).
+
+<p align="center"><img src="https://raw.githubusercontent.com/inandusolutions/inandu-grid-core/main/docs/architecture.svg" alt="Angular, React and Vue grids on top of one shared core package, which shares its query contract with Inandu.Grid.Extensions on .NET" width="820"></p>
 
 [![npm](https://img.shields.io/npm/v/@inandu-solutions/grid-react.svg)](https://www.npmjs.com/package/@inandu-solutions/grid-react)
 [![downloads](https://img.shields.io/npm/dm/@inandu-solutions/grid-react.svg)](https://www.npmjs.com/package/@inandu-solutions/grid-react)
@@ -86,9 +90,9 @@ which also has tabs for inline editing and tree data.
 ## Features
 
 **Covers the core feature set of grid-angular; a few Angular-only features are not ported (see the [feature matrix](https://github.com/inandusolutions/inandu-grid/blob/main/docs/feature-matrix.md)).** The framework-agnostic core (sorting, filtering,
-aggregation, export, i18n) is ported from grid-angular's
-[`core/`](https://github.com/inandusolutions/inandu-grid/tree/main/projects/inandu-grid/src/lib/core)
-folder and kept in sync by hand across the three repos. The React-specific layer — the
+aggregation, export, i18n) is the
+[`@inandu-solutions/grid-core`](https://github.com/inandusolutions/inandu-grid-core) package, shared with
+grid-angular and grid-vue. The React-specific layer — the
 [`<InanduGrid>`](#api-shape) component and the [`useInanduGrid()`](#api-shape) headless hook —
 covers:
 
