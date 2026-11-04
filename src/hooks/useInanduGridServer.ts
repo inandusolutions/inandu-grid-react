@@ -28,11 +28,27 @@ export function buildInanduGridQuery(query: InanduGridServerQuery, options: Inan
   const search = query.filterQuery.trim();
   if (search) params.set('q', search);
 
+  // `{field}_in` splits on commas, so a value with a comma, an empty value or padding can't travel that way.
+  // `inEncoding=repeat` switches EVERY `_in` of the request to one-value-per-occurrence, so it is sent only
+  // when some value needs it (an older server keeps working for everything else).
+  const repeatIn = Object.values(query.filterValues).some(
+    v => !!v.values && v.values.some(x => x === '' || x.includes(',') || x !== x.trim()),
+  );
+
   for (const [field, value] of Object.entries(query.filterValues)) {
+    // An empty set ("nothing ticked") matches no rows; `in` with no values would mean "no constraint".
+    if (value.values && value.values.length === 0) {
+      params.set(`${field}_none`, '1');
+      continue;
+    }
     if (!hasMeaningfulFilterValue(value)) continue;
     // A set filter ("values") takes over the column, same as the .NET side.
     if (value.values && value.values.length > 0) {
-      params.set(`${field}_in`, value.values.join(','));
+      if (repeatIn) {
+        for (const v of value.values) params.append(`${field}_in`, v);
+      } else {
+        params.set(`${field}_in`, value.values.join(','));
+      }
       continue;
     }
     if (value.text) params.set(`${field}_contains`, value.text);
@@ -42,6 +58,8 @@ export function buildInanduGridQuery(query: InanduGridServerQuery, options: Inan
     if (value.to) params.set(`${field}_lte`, value.to);
     if (value.bool === 'true' || value.bool === 'false') params.set(`${field}_eq`, value.bool);
   }
+
+  if (repeatIn) params.set('inEncoding', 'repeat');
 
   for (const [key, val] of Object.entries(options.extraParams ?? {})) params.set(key, val);
   return params;
