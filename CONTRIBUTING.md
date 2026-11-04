@@ -48,8 +48,9 @@ npm run build        # library build -> dist/ (also copies dist/style.css)
 - [ ] Updated the README's Features list if the public API changed
 - [ ] If you touched core logic (sorting, filtering, aggregation, export, i18n), check whether the
   same change applies to the [Angular](https://github.com/inandusolutions/inandu-grid) and
-  [Vue](https://github.com/inandusolutions/inandu-grid-vue) versions — the cores are kept in sync by
-  hand, not shared via a package
+  [Vue](https://github.com/inandusolutions/inandu-grid-vue) versions — the core is shared through
+  [`@inandu-solutions/grid-core`](https://github.com/inandusolutions/inandu-grid-core), so a change to it
+  belongs in that repository
 
 ## Commit messages
 

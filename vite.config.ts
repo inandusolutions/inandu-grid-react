@@ -13,7 +13,7 @@ export default defineConfig({
       fileName: 'inandu-grid-react',
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
+      external: ['react', 'react-dom', 'react/jsx-runtime', '@inandu-solutions/grid-core', 'jspdf'],
     },
   },
   test: {

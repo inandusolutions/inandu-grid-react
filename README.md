@@ -86,9 +86,9 @@ which also has tabs for inline editing and tree data.
 ## Features
 
 **Covers the core feature set of grid-angular; a few Angular-only features are not ported (see the [feature matrix](https://github.com/inandusolutions/inandu-grid/blob/main/docs/feature-matrix.md)).** The framework-agnostic core (sorting, filtering,
-aggregation, export, i18n) is ported from grid-angular's
-[`core/`](https://github.com/inandusolutions/inandu-grid/tree/main/projects/inandu-grid/src/lib/core)
-folder and kept in sync by hand across the three repos. The React-specific layer — the
+aggregation, export, i18n) is the
+[`@inandu-solutions/grid-core`](https://github.com/inandusolutions/inandu-grid-core) package, shared with
+grid-angular and grid-vue. The React-specific layer — the
 [`<InanduGrid>`](#api-shape) component and the [`useInanduGrid()`](#api-shape) headless hook —
 covers:
 
