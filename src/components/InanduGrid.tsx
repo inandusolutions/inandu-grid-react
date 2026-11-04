@@ -13,6 +13,7 @@ import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from 
 import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
 import type { InanduGridServerQuery } from '../hooks/useInanduGrid';
+import type { InanduGridRowId } from '../hooks/rowKey';
 import type { InanduCellRenderContext, InanduEditRenderContext, InanduHeaderRenderContext } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
 import { measureColumnContentWidth } from '../utils/measureColumn';
@@ -131,6 +132,13 @@ export interface InanduGridProps {
   singleDetailExpand?: boolean;
   /** An extra per-row predicate ANDed onto the free-text + column filters — same as grid-angular's `extraRowFilter`. Lets a caller layer its own filtering (e.g. an advanced-filter query) on top of the grid's own. Unset: no extra filtering. */
   extraRowFilter?: (row: InanduGridRow) => boolean;
+  /**
+   * How a row is identified across data refreshes: a field name (`'sku'`) or a function returning the key.
+   * Selection, tree and detail expansion are remembered by it, so they survive a server-side page change or
+   * `reload()` and a parent that passes a derived array; it is also the React `key` of the row. Unset: the
+   * row's `id` field when it has one, otherwise the row object itself (identity), as before.
+   */
+  rowId?: InanduGridRowId;
   /** Server-side mode: `rows` is the current page as sorted/filtered/paged by the server and `totalItems` is the full match count. See `useInanduGridServer`. Needs `pageSize` > 0. */
   serverSide?: { totalItems: number };
   /** `serverSide` only: called on mount and whenever page, sort, filters or search change. */
@@ -201,6 +209,7 @@ export function InanduGrid({
   renderDetail,
   singleDetailExpand = false,
   extraRowFilter,
+  rowId,
   serverSide,
   onQueryChange,
   virtualScroll = false,
@@ -237,6 +246,7 @@ export function InanduGrid({
     groups,
     totals,
     selectedRows,
+    rowReactKey,
     isRowSelected,
     toggleRowSelection,
     allSelected,
@@ -292,6 +302,7 @@ export function InanduGrid({
     treeDefaultExpanded,
     singleDetailExpand,
     extraRowFilter,
+    rowId,
     virtualScroll,
     serverSide,
     onQueryChange,
@@ -524,6 +535,7 @@ export function InanduGrid({
     selectColumnStyle,
     columnStyle,
     isRowSelected,
+    rowReactKey,
     toggleRowSelection,
     hasRowActions,
     editableColumns,
@@ -709,7 +721,7 @@ export function InanduGrid({
           ) : hasTreeData ? (
             treeRows.map((node, index) => (
               <TreeRow
-                key={node.row['id'] != null ? String(node.row['id']) : index}
+                key={rowReactKey(node.row)}
                 node={node}
                 rowIndex={index}
                 isTreeRowExpanded={isTreeRowExpanded}
@@ -732,7 +744,7 @@ export function InanduGrid({
                 const index = windowStart + offset;
                 return (
                   <DataRow
-                    key={row['id'] != null ? String(row['id']) : index}
+                    key={rowReactKey(row)}
                     row={row}
                     rowIndex={index}
                     clipboard={clipboard}
@@ -801,6 +813,7 @@ interface DataRowProps {
   selectColumnStyle: CSSProperties | undefined;
   columnStyle: (column: InanduGridColumn) => CSSProperties;
   isRowSelected: (row: InanduGridRow) => boolean;
+  rowReactKey: (row: InanduGridRow) => string;
   toggleRowSelection: (row: InanduGridRow) => void;
   hasRowActions: boolean;
   editableColumns: InanduGridColumn[];
@@ -1079,7 +1092,7 @@ function RowGroup({ group, columns, aggregateColumns, aggregateLabel, extraColum
         </td>
       </tr>
       {group.rows.map((row, index) => (
-        <DataRow key={row['id'] != null ? String(row['id']) : `${group.key}:${index}`} row={row} rowIndex={index} columns={columns} {...rowProps} />
+        <DataRow key={rowProps.rowReactKey(row)} row={row} rowIndex={index} columns={columns} {...rowProps} />
       ))}
     </>
   );
@@ -1095,6 +1108,7 @@ interface TreeRowProps {
   selectColumnStyle: CSSProperties | undefined;
   columnStyle: (column: InanduGridColumn) => CSSProperties;
   isRowSelected: (row: InanduGridRow) => boolean;
+  rowReactKey: (row: InanduGridRow) => string;
   toggleRowSelection: (row: InanduGridRow) => void;
   hasRowActions: boolean;
   isTreeRowExpanded: (row: InanduGridRow) => boolean;
