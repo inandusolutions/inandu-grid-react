@@ -3,8 +3,10 @@ import { hasMeaningfulFilterValue } from '../core';
 import type { InanduGridRow } from '../core';
 import type { InanduGridServerQuery } from './useInanduGrid';
 
+const warnedExtraParams = new Set<string>();
+
 export interface InanduGridQueryOptions {
-  /** Extra params appended after the grid's own (a tenant id, a fixed filter, ...). */
+  /** Extra params appended after the grid's own (a tenant id, a fixed filter, ...). A key the grid already sends (`page`, `sort`, a column filter...) is replaced by yours, with a one-time console warning. */
   extraParams?: Record<string, string>;
 }
 
@@ -61,7 +63,15 @@ export function buildInanduGridQuery(query: InanduGridServerQuery, options: Inan
 
   if (repeatIn) params.set('inEncoding', 'repeat');
 
-  for (const [key, val] of Object.entries(options.extraParams ?? {})) params.set(key, val);
+  for (const [key, val] of Object.entries(options.extraParams ?? {})) {
+    // extraParams are applied last and win, on purpose (a tenant id, a forced page size...), but replacing one of the
+    // grid's own parameters by accident (`page`, `sort`, a column filter) is easy to miss, so say so once.
+    if (params.has(key) && !warnedExtraParams.has(key)) {
+      warnedExtraParams.add(key);
+      console.warn(`[inandu-grid] extraParams.${key} replaces the grid's own "${key}" query parameter.`);
+    }
+    params.set(key, val);
+  }
   return params;
 }
 

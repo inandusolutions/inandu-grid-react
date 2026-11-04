@@ -56,6 +56,31 @@ describe('buildInanduGridQuery: shared contract fixture', () => {
 const query = (page: number, filterQuery = ''): InanduGridServerQuery => ({ page, pageSize: 25, sortCriteria: [], filterValues: {}, filterQuery });
 const ok = (data: unknown[], total: number) => new Response(JSON.stringify({ data, total }), { status: 200 });
 
+describe('buildInanduGridQuery: extraParams colliding with a grid parameter', () => {
+  it('still lets extraParams win, and warns once per key', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const q: InanduGridServerQuery = { page: 0, pageSize: 25, sortCriteria: [], filterValues: {}, filterQuery: '' };
+
+    const first = buildInanduGridQuery(q, { extraParams: { pageSize: '1000' } });
+    buildInanduGridQuery(q, { extraParams: { pageSize: '1000' } });
+
+    expect(first.get('pageSize')).toBe('1000');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('pageSize');
+    warn.mockRestore();
+  });
+
+  it('does not warn for a key the grid does not send', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const q: InanduGridServerQuery = { page: 0, pageSize: 25, sortCriteria: [], filterValues: {}, filterQuery: '' };
+
+    buildInanduGridQuery(q, { extraParams: { tenant: 'acme' } });
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
 describe('useInanduGridServer', () => {
   it('requests with the contract query string and exposes data + total', async () => {
     const fetcher = vi.fn(async () => ok([{ id: 1 }], 41));
