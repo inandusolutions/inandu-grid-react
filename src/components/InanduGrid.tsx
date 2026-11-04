@@ -544,8 +544,17 @@ export function InanduGrid({
     onCellRangeMouseEnter,
   };
 
+  // Header rows (titles + filter row) count towards aria-rowcount. Only set when the DOM holds part of the data.
+  const ariaRowCount =
+    serverSide || (pageSize > 0 && !groupByField) || hasVirtualScroll
+      ? (serverSide ? serverSide.totalItems : filteredRowCount) + 2
+      : undefined;
+
   return (
     <div className="inandu-grid-react">
+      <div className="inandu-grid-sr-only" role="status" aria-live="polite">
+        {isEmpty ? t('MsgNoData') : ''}
+      </div>
       <div className="inandu-grid-search">
         <input
           aria-label={t('MsgFilterPlaceholder')}
@@ -626,7 +635,7 @@ export function InanduGrid({
         style={hasVirtualScroll ? { height, overflow: 'auto' } : undefined}
         onScroll={hasVirtualScroll ? e => setScrollTop(e.currentTarget.scrollTop) : undefined}
       >
-      <table ref={tableRef} className="inandu-grid" onKeyDown={handleTableKeyDown}>
+      <table ref={tableRef} className="inandu-grid" onKeyDown={handleTableKeyDown} aria-rowcount={ariaRowCount}>
         <thead>
           <tr>
             {hasMasterDetail && <th />}
@@ -651,6 +660,7 @@ export function InanduGrid({
                 <th
                   key={column.field}
                   data-field={column.field}
+                  aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
                   style={columnStyle(column)}
                   className={dragOverField === column.field ? 'inandu-drag-over' : undefined}
                   draggable={column.reorder !== false}
@@ -877,6 +887,7 @@ function DataRow({
     <>
       <tr
         data-row-index={rowIndex}
+        aria-selected={selectable ? isRowSelected(row) : undefined}
         className={isDragOverRow ? 'inandu-drag-over' : undefined}
         onDragOver={
           hasRowDragHandle
@@ -1116,7 +1127,7 @@ function TreeRow({
   const toggleLabel = expanded ? t('MsgCollapseDetail') : t('MsgExpandDetail');
 
   return (
-    <tr aria-level={depth + 1} aria-expanded={expandable ? expanded : undefined}>
+    <tr aria-level={depth + 1} aria-expanded={expandable ? expanded : undefined} aria-selected={selectable ? isRowSelected(row) : undefined}>
       {selectable && (
         <td style={selectColumnStyle}>
           <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
