@@ -46,6 +46,7 @@ export function App() {
           <a href="#demo">Demo</a>
           <a href="#features">Features</a>
           <a href="#start">Get started</a>
+          <a href="architecture.html">Architecture</a>
           <a
             className="nav-icon"
             href="https://www.npmjs.com/package/@inandu-solutions/grid-react"
