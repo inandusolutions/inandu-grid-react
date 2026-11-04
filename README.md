@@ -3,7 +3,7 @@
 **A lightweight React data grid with the essentials other grids gate behind a paid enterprise
 licence — row grouping, aggregates, inline editing and Excel-compatible export — fully MIT.** The
 React port of [`@inandu-solutions/grid-angular`](https://github.com/inandusolutions/inandu-grid),
-kept in sync feature-for-feature by hand (and with its Vue sibling,
+sharing its core, kept in sync by hand (and with its Vue sibling,
 [`@inandu-solutions/grid-vue`](https://github.com/inandusolutions/inandu-grid-vue)).
 
 [![npm](https://img.shields.io/npm/v/@inandu-solutions/grid-react.svg)](https://www.npmjs.com/package/@inandu-solutions/grid-react)
@@ -57,11 +57,11 @@ this isn't that — see [Not included](#not-included) below.
 
 ## Angular and Vue versions
 
-[`inandu-grid`](https://github.com/inandusolutions/inandu-grid) is the original, feature-complete,
-MIT-licensed Angular grid this repo is ported from — same feature set, same core logic, adapted for
+[`inandu-grid`](https://github.com/inandusolutions/inandu-grid) is the original, reference implementation,
+MIT-licensed Angular grid this repo is ported from — same core logic, a [broader feature set](https://github.com/inandusolutions/inandu-grid/blob/main/docs/feature-matrix.md), adapted for
 Angular signals/standalone components instead of React hooks.
 [`inandu-grid-vue`](https://github.com/inandusolutions/inandu-grid-vue) is the Vue 3 port
-(`@inandu-solutions/grid-vue`) — same feature set again, adapted for Vue's composition API.
+(`@inandu-solutions/grid-vue`) — same core, adapted for Vue's composition API.
 
 ## Not included
 
@@ -85,7 +85,7 @@ which also has tabs for inline editing and tree data.
 
 ## Features
 
-**Feature-complete with grid-angular and grid-vue.** The framework-agnostic core (sorting, filtering,
+**Covers the core feature set of grid-angular; a few Angular-only features are not ported (see the [feature matrix](https://github.com/inandusolutions/inandu-grid/blob/main/docs/feature-matrix.md)).** The framework-agnostic core (sorting, filtering,
 aggregation, export, i18n) is ported from grid-angular's
 [`core/`](https://github.com/inandusolutions/inandu-grid/tree/main/projects/inandu-grid/src/lib/core)
 folder and kept in sync by hand across the three repos. The React-specific layer — the
