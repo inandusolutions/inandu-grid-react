@@ -9,6 +9,16 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+### Changed
+
+- `extraParams` still replace a parameter of the same name that the grid sends (`page`, `pageSize`, `sort`, a column
+  filter), as before, but now log a one-time console warning for that key so an accidental collision is not silent.
+
+### Documentation
+
+- `extraRowFilter` now says that its identity must be stable (declare it outside the component or use `useCallback`):
+  a new function on every render re-filters and re-sorts all rows each time.
+
 ### Added
 
 - `rowId` (a field name or a function) on `<InanduGrid>` and `useInanduGrid`: selection, tree expansion and
