@@ -9,6 +9,8 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-04
+
 ### Accessibility
 
 - Column headers expose `aria-sort` (`ascending` / `descending` / `none`).
@@ -32,5 +34,6 @@ grid does not implement.
 
 - `InanduEditRenderContext`: document that `renderEditor` receives the raw control shape, so arrays and objects arrive as text, and how to handle them.
 
-[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.1...v0.2.2
