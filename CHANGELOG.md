@@ -9,6 +9,8 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-04
+
 ### Changed
 
 - The framework-agnostic core is now the `@inandu-solutions/grid-core` package (a dependency) instead of a copy in
@@ -71,6 +73,7 @@ grid does not implement.
 
 - `InanduEditRenderContext`: document that `renderEditor` receives the raw control shape, so arrays and objects arrive as text, and how to handle them.
 
-[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.1...v0.2.2
