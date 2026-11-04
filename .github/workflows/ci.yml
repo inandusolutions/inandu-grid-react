@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GRID_REF: cf813d3a5c763f5d9e525bb92ccf2050f18dfcbc   # inandusolutions/inandu-grid
-      EXT_REF: f6f60dca666e6796475bd2478386ff82d8a51934    # inandusolutions/inandu-grid-extensions
+      EXT_REF: 7298765488cbdf8fffea663498c059ffef26d871    # inandusolutions/inandu-grid-extensions
       FIXTURE: src/hooks/contract/server-queries.json
     steps:
       - uses: actions/checkout@v7
