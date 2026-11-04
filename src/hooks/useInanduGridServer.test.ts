@@ -13,6 +13,40 @@ describe('buildInanduGridQuery: shared contract fixture', () => {
     });
   }
 
+  it('sends the set filter as a comma list when no value needs the repeat form', () => {
+    const q = buildInanduGridQuery({ page: 0, pageSize: 25, sortCriteria: [], filterQuery: '', filterValues: { status: { values: ['Active', 'Draft'] } } });
+    expect(q.get('status_in')).toBe('Active,Draft');
+    expect(q.has('inEncoding')).toBe(false);
+  });
+
+  it('switches every set filter to the repeat form when one value has a comma', () => {
+    const q = buildInanduGridQuery({
+      page: 0,
+      pageSize: 25,
+      sortCriteria: [],
+      filterQuery: '',
+      filterValues: { name: { values: ['Smith, John'] }, status: { values: ['Active', 'Draft'] } },
+    });
+    expect(q.getAll('name_in')).toEqual(['Smith, John']);
+    expect(q.getAll('status_in')).toEqual(['Active', 'Draft']);
+    expect(q.get('inEncoding')).toBe('repeat');
+  });
+
+  it('uses the repeat form for a padded or empty value', () => {
+    for (const bad of ['', ' padded ']) {
+      const q = buildInanduGridQuery({ page: 0, pageSize: 25, sortCriteria: [], filterQuery: '', filterValues: { name: { values: [bad, 'Ann'] } } });
+      expect(q.getAll('name_in')).toEqual([bad, 'Ann']);
+      expect(q.get('inEncoding')).toBe('repeat');
+    }
+  });
+
+  it('sends an empty set filter as {field}_none, even next to other filter keys', () => {
+    const q = buildInanduGridQuery({ page: 0, pageSize: 25, sortCriteria: [], filterQuery: '', filterValues: { tag: { values: [], text: 'x' } } });
+    expect(q.get('tag_none')).toBe('1');
+    expect(q.has('tag_in')).toBe(false);
+    expect(q.has('tag_contains')).toBe(false);
+  });
+
   it('appends extra params last', () => {
     const query: InanduGridServerQuery = { page: 0, pageSize: 25, sortCriteria: [], filterValues: {}, filterQuery: '' };
     expect(buildInanduGridQuery(query, { extraParams: { tenant: 'acme' } }).toString()).toBe('page=1&pageSize=25&tenant=acme');
