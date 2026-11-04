@@ -83,7 +83,7 @@ test.describe('localisation', () => {
     await expect(page.getByRole('button', { name: 'Agregar fila' })).toBeVisible();
     await expect(page.getByPlaceholder('Buscar').first()).toBeVisible();
     await page.getByPlaceholder('Buscar').first().fill('zzzz-no-match');
-    await expect(page.getByText('Sin datos')).toBeVisible();
+    await expect(page.locator('table.inandu-grid').getByText('Sin datos')).toBeVisible();
   });
 
   test('es validation messages are translated', async ({ page }) => {
