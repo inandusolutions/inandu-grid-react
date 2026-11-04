@@ -58,7 +58,8 @@ test('search narrows rows and clearing it restores them', async ({ page }) => {
 
 test('search with no match shows the empty state', async ({ page }) => {
   await page.getByPlaceholder('Search').first().fill('zzzz-no-match');
-  await expect(page.getByText('No data')).toBeVisible();
+  // The live region repeats the message for screen readers, so look inside the table.
+  await expect(page.locator('table.inandu-grid').getByText('No data')).toBeVisible();
 });
 
 test('pagination moves between pages and disables the edges', async ({ page }) => {

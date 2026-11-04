@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
 
@@ -136,12 +136,13 @@ describe('InanduGrid', () => {
 
   it('shows the MsgNoData message when there are no rows to show', () => {
     render(<InanduGrid rows={[]} columns={columns} />);
-    expect(screen.getByText('No data')).toBeInTheDocument();
+    // The live region repeats the message for screen readers, so look inside the table.
+    expect(within(screen.getByRole('table')).getByText('No data')).toBeInTheDocument();
   });
 
   it('translates built-in UI strings via the lang prop', () => {
     render(<InanduGrid rows={[]} columns={columns} lang="es" exportable />);
-    expect(screen.getByText('Sin datos')).toBeInTheDocument();
+    expect(within(screen.getByRole('table')).getByText('Sin datos')).toBeInTheDocument();
     expect(screen.getByText('Exportar CSV')).toBeInTheDocument();
   });
 
@@ -788,5 +789,57 @@ describe('<InanduGrid serverSide>', () => {
     expect(screen.getAllByText(/Beatriz|Ana/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Page 1 of 4 \(7\)/)).toBeTruthy();
     expect(screen.queryByLabelText('Group by')).toBeNull();
+  });
+});
+
+describe('InanduGrid accessibility', () => {
+  it('exposes the sort state on every column header', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    const name = screen.getByRole('columnheader', { name: 'Sort by Name' });
+    const age = screen.getByRole('columnheader', { name: 'Sort by Age' });
+    expect(name).toHaveAttribute('aria-sort', 'none');
+
+    fireEvent.click(name);
+    expect(name).toHaveAttribute('aria-sort', 'ascending');
+    expect(age).toHaveAttribute('aria-sort', 'none');
+
+    fireEvent.click(name);
+    expect(name).toHaveAttribute('aria-sort', 'descending');
+  });
+
+  it('marks data rows as selected or not once the grid is selectable', () => {
+    render(<InanduGrid rows={rows} columns={columns} selectable />);
+    const dataRows = () => screen.getAllByRole('row').filter(r => r.hasAttribute('aria-selected'));
+    expect(dataRows().map(r => r.getAttribute('aria-selected'))).toEqual(['false', 'false']);
+
+    fireEvent.click(screen.getAllByLabelText(/Select row/)[0]);
+    expect(dataRows().map(r => r.getAttribute('aria-selected')).sort()).toEqual(['false', 'true']);
+  });
+
+  it('does not set aria-selected when rows cannot be selected', () => {
+    render(<InanduGrid rows={rows} columns={columns} />);
+    expect(screen.getAllByRole('row').some(r => r.hasAttribute('aria-selected'))).toBe(false);
+  });
+
+  it('reports the full row count (two header rows included) only when the DOM holds part of the data', () => {
+    const many = Array.from({ length: 7 }, (_, i) => ({ name: `N${i}`, age: i }));
+    const { container, rerender } = render(<InanduGrid rows={many} columns={columns} pageSize={3} />);
+    expect(container.querySelector('table')).toHaveAttribute('aria-rowcount', '9');
+
+    rerender(<InanduGrid rows={many} columns={columns} />);
+    expect(container.querySelector('table')).not.toHaveAttribute('aria-rowcount');
+
+    rerender(<InanduGrid rows={many.slice(0, 3)} columns={columns} pageSize={3} serverSide={{ totalItems: 120 }} />);
+    expect(container.querySelector('table')).toHaveAttribute('aria-rowcount', '122');
+  });
+
+  it('announces an empty result in a polite live region', () => {
+    const { rerender } = render(<InanduGrid rows={rows} columns={columns} />);
+    const live = screen.getByRole('status');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    expect(live).toHaveTextContent('');
+
+    rerender(<InanduGrid rows={[]} columns={columns} />);
+    expect(screen.getByRole('status')).not.toHaveTextContent('');
   });
 });
