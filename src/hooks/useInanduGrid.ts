@@ -18,7 +18,7 @@ import {
   matchesColumnFilter,
   MIN_COLUMN_WIDTH,
   parseDraftValue,
-  parsePastedCellValue,
+  parsePastedCell,
   SELECT_COLUMN_WIDTH,
   TreeVisibleRow,
 } from '../core';
@@ -34,6 +34,8 @@ export interface InanduGridColumn {
   headerText?: string;
   type?: InanduColumnType;
   format?: string;
+  /** `'date'` columns: the zone dates are shown and filtered in: `'local'` (default), `'utc'` or an IANA name such as `'America/Bogota'`. */
+  timeZone?: string;
   order?: number;
   aggregate?: InanduColumnAggregate;
   /** Whether this column can be picked in the "group by" control. Default: true. */
@@ -113,6 +115,7 @@ function toColumnConfig(column: InanduGridColumn): ColumnConfig {
     format: () => column.format ?? '',
     order: () => column.order,
     aggregate: () => column.aggregate ?? '',
+    timeZone: () => column.timeZone,
   };
 }
 
@@ -403,7 +406,7 @@ export function useInanduGrid({
       result = result.filter(row =>
         visibleColumns.some(column => {
           const config = columnConfigs.get(column.field)!;
-          return formatCellValue(row[column.field], config.type(), config.format(), locale).toLowerCase().includes(query);
+          return formatCellValue(row[column.field], config.type(), config.format(), locale, undefined, config.timeZone?.()).toLowerCase().includes(query);
         }),
       );
     }
@@ -426,7 +429,7 @@ export function useInanduGrid({
       result = [...result].sort((a, b) => {
         for (const { field, direction } of sortCriteria) {
           const sign = direction === 'asc' ? 1 : -1;
-          const cmp = compareCellValues(a[field], b[field], locale) * sign;
+          const cmp = compareCellValues(a[field], b[field], { locale: locale, type: columnConfigs.get(field)?.type() }) * sign;
           if (cmp !== 0) return cmp;
         }
         return 0;
@@ -448,7 +451,7 @@ export function useInanduGrid({
 
     const buckets = new Map<string, InanduGridRow[]>();
     for (const row of sortedFilteredRows) {
-      const key = formatCellValue(row[groupByField], column.type(), column.format(), locale);
+      const key = formatCellValue(row[groupByField], column.type(), column.format(), locale, undefined, column.timeZone?.());
       const bucket = buckets.get(key);
       if (bucket) bucket.push(row);
       else buckets.set(key, [row]);
@@ -492,7 +495,7 @@ export function useInanduGrid({
             query &&
             !visibleColumns.some(column => {
               const config = columnConfigs.get(column.field)!;
-              return formatCellValue(row[column.field], config.type(), config.format(), locale).toLowerCase().includes(query);
+              return formatCellValue(row[column.field], config.type(), config.format(), locale, undefined, config.timeZone?.()).toLowerCase().includes(query);
             })
           ) {
             return false;
@@ -511,7 +514,7 @@ export function useInanduGrid({
       sortCriteria.length > 0
         ? (a: InanduGridRow, b: InanduGridRow): number => {
             for (const { field, direction } of sortCriteria) {
-              const cmp = compareCellValues(a[field], b[field], locale) * (direction === 'asc' ? 1 : -1);
+              const cmp = compareCellValues(a[field], b[field], { locale: locale, type: columnConfigs.get(field)?.type() }) * (direction === 'asc' ? 1 : -1);
               if (cmp !== 0) return cmp;
             }
             return 0;
@@ -881,7 +884,7 @@ export function useInanduGrid({
     const row = visibleRows[rowIndex];
     const column = columnConfigs.get(field);
     if (!row || !column) return '';
-    return formatCellValue(row[field], column.type(), column.format(), locale);
+    return formatCellValue(row[field], column.type(), column.format(), locale, undefined, column.timeZone?.());
   }
 
   /**
@@ -906,7 +909,8 @@ export function useInanduGrid({
       pastedRow.forEach((cellText, cOffset) => {
         const targetColumn = visibleColumns[colIndex + cOffset];
         if (!targetColumn || !targetColumn.editable) return;
-        updates.push({ row: targetRow, field: targetColumn.field, value: parsePastedCellValue(cellText, targetColumn.type ?? 'string') });
+        const parsed = parsePastedCell(cellText, targetColumn.type ?? 'string', { locale: locale });
+        if (parsed) updates.push({ row: targetRow, field: targetColumn.field, value: parsed.value });
       });
     });
     if (updates.length > 0) onCellsPaste?.(updates);

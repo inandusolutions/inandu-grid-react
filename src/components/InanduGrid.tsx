@@ -422,7 +422,7 @@ export function InanduGrid({
   function selectedRangeText(r: RangeRect): string {
     const rows = visibleRows.slice(r.minRow, r.maxRow + 1);
     const rangeColumns = visibleColumns.slice(r.minCol, r.maxCol + 1);
-    return rows.map(row => rangeColumns.map(column => formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)).join('\t')).join('\n');
+    return rows.map(row => rangeColumns.map(column => formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale, undefined, column.timeZone)).join('\t')).join('\n');
   }
 
   const aggregateColumns = visibleColumns.filter(column => column.aggregate);
@@ -978,7 +978,7 @@ function DataRow({
             ) : column.renderCell ? (
               column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
             ) : (
-              formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
+              formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale, undefined, column.timeZone)
             )}
           </td>
         ))}
@@ -1166,12 +1166,12 @@ function TreeRow({
               )}
               {column.renderCell
                 ? column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
-                : formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)}
+                : formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale, undefined, column.timeZone)}
             </span>
           ) : column.renderCell ? (
             column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
           ) : (
-            formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale)
+            formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale, undefined, column.timeZone)
           )}
         </td>
       ))}
