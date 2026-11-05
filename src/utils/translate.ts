@@ -5,7 +5,7 @@ export type InanduGridMessageKey = keyof typeof en;
 /** Replaces `{{name}}` tokens in `template` with `params[name]`, same mini-syntax the built-in dictionaries use (ngx-translate's, on the Angular side). Leaves an unmatched token as-is. */
 export function interpolate(template: string, params?: Record<string, string | number>): string {
   if (!params) return template;
-  return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => (name in params ? String(params[name]) : match));
+  return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => (Object.hasOwn(params, name) ? String(params[name]) : match));
 }
 
 /**
@@ -13,9 +13,10 @@ export function interpolate(template: string, params?: Record<string, string | n
  * dictionaries by primary subtag, falling back to English for an unrecognized one — same fallback
  * behavior `INANDU_GRID_TRANSLATIONS` documents for the Angular side.
  */
-export function createTranslator(lang: string) {
+export function createTranslator(lang: string, customTranslations?: Record<string, Record<string, string>>) {
   const primary = lang.split('-')[0];
+  const custom = customTranslations && Object.hasOwn(customTranslations, primary) ? customTranslations[primary] : undefined;
   const dict = INANDU_GRID_TRANSLATIONS[primary] ?? en;
   return (key: InanduGridMessageKey, params?: Record<string, string | number>): string =>
-    interpolate(dict[key] ?? en[key], params);
+    interpolate((custom && Object.hasOwn(custom, key) ? custom[key] : undefined) ?? dict[key] ?? en[key], params);
 }

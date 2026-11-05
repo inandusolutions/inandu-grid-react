@@ -9,10 +9,10 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import type { InanduGridColumnFilterValue, InanduGridRow, TreeVisibleRow } from '../core';
+import type { InanduGridColumnFilterValue, InanduGridRow, InanduGridStatePart, TreeVisibleRow } from '../core';
 import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '../core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
-import type { InanduGridServerQuery } from '../hooks/useInanduGrid';
+import type { InanduGridServerQuery, InanduGridSort } from '../hooks/useInanduGrid';
 import type { InanduGridRowId } from '../hooks/rowKey';
 import type { InanduCellRenderContext, InanduEditRenderContext, InanduHeaderRenderContext } from '../hooks/useInanduGrid';
 import { exportCsv, exportExcel, exportPdf, printTable } from '../utils/exporters';
@@ -169,6 +169,40 @@ export interface InanduGridProps {
    * the virtual window), not the full dataset. Default: false.
    */
   autosize?: boolean;
+  /** Shows a loading row in place of the data rows (and disables the export/print toolbar) while `true`. Default: false. */
+  loading?: boolean;
+  /** Shows this message in place of the data rows (and disables the export/print toolbar) when non-empty. Shown verbatim: translate it yourself. Wins over `loading`. */
+  error?: string;
+  /** Text direction of the grid. Default: `'ltr'`. */
+  dir?: 'ltr' | 'rtl' | 'auto';
+  /** Adds an `inandu-theme-{theme}` class to the root (`'material'`, `'dark'` and `'minimal'` are built in; any other name needs your own CSS). */
+  theme?: string;
+  /** The `id` of the root element; also the default base filename of the exports. */
+  id?: string;
+  /** Fixed width (px) of the root element. Unset: the container's width. */
+  width?: number;
+  /** Shows the search box. Default: true (grid-angular's is opt-in). */
+  filter?: boolean;
+  /** Placeholder of the search box. Default: the translated one. */
+  filterPlaceholder?: string;
+  /** Shows the totals footer for the columns with an `aggregate`. Default: true (grid-angular's is opt-in). */
+  showTotals?: boolean;
+  /** Overrides built-in texts per language: `{ es: { MsgNoData: 'Nada' } }`. Merged over the built-in dictionary. */
+  customTranslations?: Record<string, Record<string, string>>;
+  /** Saves column widths/order/visibility/pins, sort and filters to `localStorage` under this key and restores them on mount. See `useInanduGrid`. */
+  stateKey?: string;
+  /** Which parts of the state `stateKey` saves; all by default. Leave out `'filterQuery'` and `'columnFilters'` to keep typed text out of storage. */
+  persist?: readonly InanduGridStatePart[];
+  /** Rows shown above the data rows, outside of filtering, sorting, paging and totals (a summary row you computed yourself). Read-only. */
+  pinnedTopRows?: InanduGridRow[];
+  /** Rows shown below the data rows, with the same rules as `pinnedTopRows`. */
+  pinnedBottomRows?: InanduGridRow[];
+  /** Called whenever the sort changes (not on mount). An empty array means "no sort". */
+  onSortChange?: (criteria: InanduGridSort[]) => void;
+  /** Called whenever the search text or a column filter changes (not on mount). */
+  onFilterChange?: (state: { query: string; columnFilters: Record<string, InanduGridColumnFilterValue> }) => void;
+  /** Called whenever the page changes (not on mount). `page` is 0-based. */
+  onPageChange?: (state: { page: number; pageSize: number }) => void;
 }
 
 /**
@@ -186,7 +220,7 @@ export function InanduGrid({
   selectable = false,
   onSelectionChange,
   exportable = false,
-  exportFilenameBase = 'inandu-grid',
+  exportFilenameBase: exportFilenameBaseProp,
   deletable = false,
   deleteConfirmMessage,
   bulkDeleteConfirmMessage,
@@ -217,7 +251,25 @@ export function InanduGrid({
   height = 400,
   overscan = 4,
   autosize = false,
+  loading = false,
+  error = '',
+  dir = 'ltr',
+  theme = '',
+  id,
+  width,
+  filter = true,
+  filterPlaceholder,
+  showTotals = true,
+  customTranslations,
+  stateKey,
+  persist,
+  pinnedTopRows = [],
+  pinnedBottomRows = [],
+  onSortChange,
+  onFilterChange,
+  onPageChange,
 }: InanduGridProps) {
+  const exportFilenameBase = exportFilenameBaseProp ?? (id || 'inandu-grid');
   const {
     visibleColumns,
     hideableColumns,
@@ -283,6 +335,7 @@ export function InanduGrid({
     isRowExpanded,
     toggleRowExpanded,
     hasVirtualScroll,
+    sortCriteria,
   } = useInanduGrid({
     rows,
     columns,
@@ -306,9 +359,11 @@ export function InanduGrid({
     virtualScroll,
     serverSide,
     onQueryChange,
+    stateKey,
+    persist,
   });
 
-  const t = useMemo(() => createTranslator(lang ?? locale), [lang, locale]);
+  const t = useMemo(() => createTranslator(lang ?? locale, customTranslations), [lang, locale, customTranslations]);
   const [dragOverField, setDragOverField] = useState<string | undefined>(undefined);
   const [dragOverRow, setDragOverRow] = useState<InanduGridRow | undefined>(undefined);
   const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
@@ -318,6 +373,29 @@ export function InanduGrid({
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedRows));
   }, [selectedRows, onSelectionChange]);
+
+  // sort / filter / page notifications: only on a change, never for the initial state.
+  const mounted = useRef(false);
+  const lastSort = useRef(sortCriteria);
+  const lastFilter = useRef({ query: filterQuery, filters: filterValues });
+  const lastPage = useRef(page);
+  useEffect(() => {
+    if (mounted.current && lastSort.current !== sortCriteria) onSortChange?.(sortCriteria);
+    lastSort.current = sortCriteria;
+  }, [sortCriteria, onSortChange]);
+  useEffect(() => {
+    if (mounted.current && (lastFilter.current.query !== filterQuery || lastFilter.current.filters !== filterValues)) {
+      onFilterChange?.({ query: filterQuery, columnFilters: filterValues });
+    }
+    lastFilter.current = { query: filterQuery, filters: filterValues };
+  }, [filterQuery, filterValues, onFilterChange]);
+  useEffect(() => {
+    if (mounted.current && lastPage.current !== page) onPageChange?.({ page, pageSize });
+    lastPage.current = page;
+  }, [page, pageSize, onPageChange]);
+  useEffect(() => {
+    mounted.current = true;
+  }, []);
 
   // The resize handle's drag: mousemove/mouseup are tracked on `window` (not the handle itself),
   // since the pointer routinely leaves the handle and even the table while dragging — same reason
@@ -496,6 +574,74 @@ export function InanduGrid({
   }
 
   /**
+   * Keyboard model of the ARIA grid pattern, the same as grid-angular's: the grid is one tab stop (the first header cell),
+   * the arrow keys move between cells (Home/End within the row, Ctrl+Home/Ctrl+End to the first/last cell, PageUp/PageDown
+   * ten rows) and Enter or Space on a header cell sorts by it (Shift adds the column to the sort). Ignored while focus is
+   * in a control inside a cell, so typing and arrows in an input keep working.
+   */
+  function handleGridNavigation(event: ReactKeyboardEvent<HTMLTableElement>): boolean {
+    const key = event.key;
+    const target = event.target as HTMLElement;
+    const cell = target.closest<HTMLElement>('[role="columnheader"], [role="gridcell"]');
+    if (!cell || target !== cell) return false; // focus is on a control inside the cell, not on the cell
+
+    if ((key === 'Enter' || key === ' ') && cell.getAttribute('role') === 'columnheader') {
+      const field = cell.getAttribute('data-field');
+      if (!field) return false;
+      event.preventDefault();
+      toggleSort(field, event.shiftKey);
+      return true;
+    }
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(key)) return false;
+
+    const row = cell.closest('tr');
+    const table = cell.closest('table');
+    if (!row || !table) return false;
+    const cellsOf = (tr: Element) => Array.from(tr.querySelectorAll<HTMLElement>('[role="columnheader"], [role="gridcell"]'));
+    const rows = Array.from(table.querySelectorAll<HTMLElement>('tr[role="row"]:not([aria-hidden="true"]):not(.inandu-grid-filter-row)')).filter(tr => cellsOf(tr).length > 0);
+    const rowIndex = rows.indexOf(row as HTMLElement);
+    const cells = cellsOf(row);
+    const colIndex = cells.indexOf(cell);
+    const at = (r: number, c: number) => cellsOf(rows[Math.min(rows.length - 1, Math.max(0, r))] ?? row)[c];
+
+    let next: HTMLElement | undefined;
+    switch (key) {
+      case 'ArrowRight':
+        next = cells[colIndex + 1];
+        break;
+      case 'ArrowLeft':
+        next = cells[colIndex - 1];
+        break;
+      case 'Home':
+        next = event.ctrlKey ? at(0, 0) : cells[0];
+        break;
+      case 'End': {
+        const last = cellsOf(event.ctrlKey ? rows[rows.length - 1] : row);
+        next = last[event.ctrlKey ? last.length - 1 : cells.length - 1];
+        break;
+      }
+      case 'ArrowUp':
+        next = rowIndex > 0 ? at(rowIndex - 1, colIndex) : undefined;
+        break;
+      case 'ArrowDown':
+        next = rowIndex < rows.length - 1 ? at(rowIndex + 1, colIndex) : undefined;
+        break;
+      case 'PageUp':
+        next = rowIndex > 0 ? at(rowIndex - 10, colIndex) : undefined;
+        break;
+      case 'PageDown':
+        next = rowIndex < rows.length - 1 ? at(rowIndex + 10, colIndex) : undefined;
+        break;
+    }
+    if (!next) return false;
+    event.preventDefault();
+    cell.tabIndex = -1;
+    next.tabIndex = 0;
+    next.focus();
+    return true;
+  }
+
+  /**
    * The `Ctrl+C`/`Ctrl+V` half of grid-angular's `handleClipboardShortcut` — resolves the focused
    * cell via the `data-row-index`/`data-field` attributes each `<td>`/`<tr>` carries (only in the
    * flat, non-grouped render path, same restriction), then defers to `copyCellText()`/`pasteAt()`.
@@ -503,6 +649,7 @@ export function InanduGrid({
    * text* there should win, not a whole-cell copy/paste.
    */
   function handleTableKeyDown(event: ReactKeyboardEvent<HTMLTableElement>) {
+    if (handleGridNavigation(event)) return;
     if (!clipboard || !(event.ctrlKey || event.metaKey)) return;
     const key = event.key.toLowerCase();
     if (key !== 'c' && key !== 'v') return;
@@ -556,6 +703,31 @@ export function InanduGrid({
     onCellRangeMouseEnter,
   };
 
+
+  /** A read-only row outside of filtering, sorting, paging and totals (`pinnedTopRows` / `pinnedBottomRows`). */
+  function renderPinnedRows(pinned: InanduGridRow[], position: 'top' | 'bottom') {
+    if (pinned.length === 0 || hasVirtualScroll) return null;
+    return (
+      <tbody className={`inandu-grid-pinned inandu-grid-pinned-${position}`}>
+        {pinned.map((row, index) => (
+          <tr role="row" key={`${position}-${index}`} className="inandu-grid-pinned-row">
+            {hasMasterDetail && <td role="gridcell" />}
+            {hasRowDragHandle && <td role="gridcell" />}
+            {selectable && <td role="gridcell" style={selectColumnStyle} />}
+            {visibleColumns.map(column => (
+              <td role="gridcell" tabIndex={-1} key={column.field} style={columnStyle(column)}>
+                {column.renderCell
+                  ? column.renderCell({ value: row[column.field], row, field: column.field } satisfies InanduCellRenderContext)
+                  : formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale, undefined, column.timeZone)}
+              </td>
+            ))}
+            {hasRowActions && <td role="gridcell" />}
+          </tr>
+        ))}
+      </tbody>
+    );
+  }
+
   // Header rows (titles + filter row) count towards aria-rowcount. Only set when the DOM holds part of the data.
   const ariaRowCount =
     serverSide || (pageSize > 0 && !groupByField) || hasVirtualScroll
@@ -563,32 +735,40 @@ export function InanduGrid({
       : undefined;
 
   return (
-    <div className="inandu-grid-react">
+    <div
+      id={id || undefined}
+      dir={dir}
+      className={theme ? `inandu-grid-react inandu-theme-${theme}` : 'inandu-grid-react'}
+      style={width ? { width } : undefined}
+    >
+      {/* What a sighted user sees without moving focus: an error, loading, or an empty result. */}
       <div className="inandu-grid-sr-only" role="status" aria-live="polite">
-        {isEmpty ? t('MsgNoData') : ''}
+        {error || (loading ? t('MsgLoading') : isEmpty ? t('MsgNoData') : '')}
       </div>
-      <div className="inandu-grid-search">
-        <input
-          aria-label={t('MsgFilterPlaceholder')}
-          type="text"
-          placeholder={`${t('MsgFilterPlaceholder')}…`}
-          value={filterQuery}
-          onChange={e => setFilterQuery(e.target.value)}
-        />
-      </div>
+      {filter && (
+        <div className="inandu-grid-search">
+          <input
+            aria-label={filterPlaceholder || t('MsgFilterPlaceholder')}
+            type="text"
+            placeholder={filterPlaceholder ?? `${t('MsgFilterPlaceholder')}…`}
+            value={filterQuery}
+            onChange={e => setFilterQuery(e.target.value)}
+          />
+        </div>
+      )}
       <div className="inandu-grid-toolbar">
         {exportable && (
           <>
-            <button type="button" onClick={() => exportCsv(exportRows, visibleColumns, locale, exportFilenameBase)}>
+            <button type="button" disabled={loading || !!error} onClick={() => exportCsv(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgExportCsv')}
             </button>
-            <button type="button" onClick={() => exportExcel(exportRows, visibleColumns, locale, exportFilenameBase)}>
+            <button type="button" disabled={loading || !!error} onClick={() => exportExcel(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgExportExcel')}
             </button>
             <button type="button" onClick={() => void exportPdf(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgExportPdf')}
             </button>
-            <button type="button" onClick={() => printTable(exportRows, visibleColumns, locale, exportFilenameBase)}>
+            <button type="button" disabled={loading || !!error} onClick={() => printTable(exportRows, visibleColumns, locale, exportFilenameBase)}>
               {t('MsgPrint')}
             </button>
           </>
@@ -647,13 +827,13 @@ export function InanduGrid({
         style={hasVirtualScroll ? { height, overflow: 'auto' } : undefined}
         onScroll={hasVirtualScroll ? e => setScrollTop(e.currentTarget.scrollTop) : undefined}
       >
-      <table ref={tableRef} className="inandu-grid" onKeyDown={handleTableKeyDown} aria-rowcount={ariaRowCount}>
+      <table ref={tableRef} className="inandu-grid" role="grid" onKeyDown={handleTableKeyDown} aria-rowcount={ariaRowCount}>
         <thead>
-          <tr>
-            {hasMasterDetail && <th />}
-            {hasRowDragHandle && <th />}
+          <tr role="row">
+            {hasMasterDetail && <th role="columnheader" />}
+            {hasRowDragHandle && <th role="columnheader" />}
             {selectable && (
-              <th style={selectColumnStyle}>
+              <th role="columnheader" tabIndex={0} style={selectColumnStyle}>
                 <input
                   aria-label={t('MsgSelectAll')}
                   type="checkbox"
@@ -665,13 +845,14 @@ export function InanduGrid({
                 />
               </th>
             )}
-            {visibleColumns.map(column => {
+            {visibleColumns.map((column, colIndex) => {
               const direction = sortDirectionFor(column.field);
               const priority = sortPriorityFor(column.field);
               return (
-                <th
+                <th role="columnheader"
                   key={column.field}
                   data-field={column.field}
+                  tabIndex={colIndex === 0 && !selectable ? 0 : -1}
                   aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
                   style={columnStyle(column)}
                   className={dragOverField === column.field ? 'inandu-drag-over' : undefined}
@@ -698,25 +879,34 @@ export function InanduGrid({
                 </th>
               );
             })}
-            {hasRowActions && <th />}
+            {hasRowActions && <th role="columnheader" />}
           </tr>
-          <tr className="inandu-grid-filter-row">
-            {hasMasterDetail && <th />}
-            {hasRowDragHandle && <th />}
-            {selectable && <th style={selectColumnStyle} />}
+          <tr role="row" className="inandu-grid-filter-row">
+            {hasMasterDetail && <th role="columnheader" />}
+            {hasRowDragHandle && <th role="columnheader" />}
+            {selectable && <th role="columnheader" style={selectColumnStyle} />}
             {visibleColumns.map(column => (
-              <th key={column.field} style={columnStyle(column)}>
+              <th role="columnheader" key={column.field} style={columnStyle(column)}>
                 <FilterControl column={column} value={filterValues[column.field]} onChange={patch => patchFilterValue(column.field, patch)} t={t} />
               </th>
             ))}
-            {hasRowActions && <th />}
+            {hasRowActions && <th role="columnheader" />}
           </tr>
         </thead>
+        {renderPinnedRows(pinnedTopRows, 'top')}
         <tbody>
           {isAddingRow && <NewRowDraft {...rowProps} onSave={() => void saveNewRow()} onCancel={cancelAddRow} />}
-          {isEmpty ? (
-            <tr>
-              <td colSpan={visibleColumns.length + extraColumnCount}>{t('MsgNoData')}</td>
+          {error ? (
+            <tr role="row" className="inandu-grid-error-row">
+              <td role="gridcell" colSpan={visibleColumns.length + extraColumnCount}>{error}</td>
+            </tr>
+          ) : loading ? (
+            <tr role="row" className="inandu-grid-loading-row">
+              <td role="gridcell" colSpan={visibleColumns.length + extraColumnCount}>{t('MsgLoading')}</td>
+            </tr>
+          ) : isEmpty ? (
+            <tr role="row">
+              <td role="gridcell" colSpan={visibleColumns.length + extraColumnCount}>{t('MsgNoData')}</td>
             </tr>
           ) : hasTreeData ? (
             treeRows.map((node, index) => (
@@ -737,7 +927,7 @@ export function InanduGrid({
             <>
               {hasVirtualScroll && topSpacerHeight > 0 && (
                 <tr aria-hidden="true">
-                  <td style={{ height: topSpacerHeight, padding: 0, border: 'none' }} colSpan={visibleColumns.length + extraColumnCount} />
+                  <td role="gridcell" style={{ height: topSpacerHeight, padding: 0, border: 'none' }} colSpan={visibleColumns.length + extraColumnCount} />
                 </tr>
               )}
               {windowedRows.map((row, offset) => {
@@ -765,24 +955,25 @@ export function InanduGrid({
               })}
               {hasVirtualScroll && bottomSpacerHeight > 0 && (
                 <tr aria-hidden="true">
-                  <td style={{ height: bottomSpacerHeight, padding: 0, border: 'none' }} colSpan={visibleColumns.length + extraColumnCount} />
+                  <td role="gridcell" style={{ height: bottomSpacerHeight, padding: 0, border: 'none' }} colSpan={visibleColumns.length + extraColumnCount} />
                 </tr>
               )}
             </>
           )}
         </tbody>
-        {aggregateColumns.length > 0 && !hasVirtualScroll && (
+        {renderPinnedRows(pinnedBottomRows, 'bottom')}
+        {showTotals && aggregateColumns.length > 0 && !hasVirtualScroll && (
           <tfoot>
-            <tr className="inandu-grid-totals-row">
-              {hasMasterDetail && <td />}
-              {hasRowDragHandle && <td />}
-              {selectable && <td style={selectColumnStyle} />}
+            <tr role="row" className="inandu-grid-totals-row">
+              {hasMasterDetail && <td role="gridcell" />}
+              {hasRowDragHandle && <td role="gridcell" />}
+              {selectable && <td role="gridcell" style={selectColumnStyle} />}
               {visibleColumns.map(column => (
-                <td key={column.field} style={columnStyle(column)}>
+                <td role="gridcell" key={column.field} style={columnStyle(column)}>
                   {column.aggregate ? aggregateLabel(column, totals) : ''}
                 </td>
               ))}
-              {hasRowActions && <td />}
+              {hasRowActions && <td role="gridcell" />}
             </tr>
           </tfoot>
         )}
@@ -835,14 +1026,14 @@ interface DataRowProps {
   isCellInRange?: (rowIndex: number, colIndex: number) => boolean;
   onCellRangeMouseDown?: (event: ReactMouseEvent, rowIndex: number, colIndex: number) => void;
   onCellRangeMouseEnter?: (rowIndex: number, colIndex: number) => void;
-  /** Adds a leading drag-handle `<td>` and wires the whole row for drag-and-drop reordering — only in the flat, non-grouped render path, same restriction grid-angular's `rowReorder` has. */
+  /** Adds a leading drag-handle `<td role="gridcell">` and wires the whole row for drag-and-drop reordering — only in the flat, non-grouped render path, same restriction grid-angular's `rowReorder` has. */
   hasRowDragHandle?: boolean;
   isDragOverRow?: boolean;
   onRowDragStart?: () => void;
   onRowDragOver?: () => void;
   onRowDragLeave?: () => void;
   onRowDrop?: () => void;
-  /** Adds a leading expand/collapse toggle `<td>` and (while expanded) a full-width detail row right below — only in the flat, non-grouped render path, same restriction grid-angular's `hasMasterDetail` has. */
+  /** Adds a leading expand/collapse toggle `<td role="gridcell">` and (while expanded) a full-width detail row right below — only in the flat, non-grouped render path, same restriction grid-angular's `hasMasterDetail` has. */
   hasMasterDetail?: boolean;
   isRowExpanded?: boolean;
   toggleRowExpanded?: () => void;
@@ -876,7 +1067,6 @@ function DataRow({
   fieldErrors,
   isValidating,
   setRowDraftValue,
-  clipboard = false,
   cellRangeSelection = false,
   isCellInRange,
   onCellRangeMouseDown,
@@ -898,7 +1088,7 @@ function DataRow({
 
   return (
     <>
-      <tr
+      <tr role="row"
         data-row-index={rowIndex}
         aria-selected={selectable ? isRowSelected(row) : undefined}
         className={isDragOverRow ? 'inandu-drag-over' : undefined}
@@ -921,7 +1111,7 @@ function DataRow({
         }
       >
         {hasMasterDetail && (
-          <td>
+          <td role="gridcell">
             <button
               type="button"
               className="inandu-grid-detail-toggle"
@@ -934,7 +1124,7 @@ function DataRow({
           </td>
         )}
         {hasRowDragHandle && (
-          <td>
+          <td role="gridcell">
             <span
               className="inandu-grid-row-drag-handle"
               aria-label={t('MsgDragRow')}
@@ -949,16 +1139,16 @@ function DataRow({
           </td>
         )}
         {selectable && (
-          <td style={selectColumnStyle}>
+          <td role="gridcell" style={selectColumnStyle}>
             <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
           </td>
         )}
         {columns.map((column, colIndex) => (
-          <td
+          <td role="gridcell"
             key={column.field}
             style={columnStyle(column)}
             data-field={column.field}
-            tabIndex={clipboard ? 0 : undefined}
+            tabIndex={-1}
             className={cellRangeSelection && isCellInRange?.(rowIndex, colIndex) ? 'inandu-cell-range-selected' : undefined}
             onMouseDown={cellRangeSelection ? e => onCellRangeMouseDown?.(e, rowIndex, colIndex) : undefined}
             onMouseEnter={cellRangeSelection ? () => onCellRangeMouseEnter?.(rowIndex, colIndex) : undefined}
@@ -983,7 +1173,7 @@ function DataRow({
           </td>
         ))}
         {hasRowActions && (
-          <td className="inandu-grid-row-actions">
+          <td role="gridcell" className="inandu-grid-row-actions">
             {editing ? (
               <>
                 <button type="button" disabled={isValidating} onClick={() => saveRow(row)}>
@@ -1011,8 +1201,8 @@ function DataRow({
         )}
       </tr>
       {hasMasterDetail && isRowExpanded && (
-        <tr className="inandu-grid-detail-row">
-          <td colSpan={columns.length + extraColumnCount}>{renderDetail?.(row)}</td>
+        <tr role="row" className="inandu-grid-detail-row">
+          <td role="gridcell" colSpan={columns.length + extraColumnCount}>{renderDetail?.(row)}</td>
         </tr>
       )}
     </>
@@ -1035,10 +1225,10 @@ function NewRowDraft({
   onCancel,
 }: DataRowProps & { onSave: () => void; onCancel: () => void }) {
   return (
-    <tr className="inandu-grid-new-row">
-      {selectable && <td style={selectColumnStyle} />}
+    <tr role="row" className="inandu-grid-new-row">
+      {selectable && <td role="gridcell" style={selectColumnStyle} />}
       {columns.map(column => (
-        <td key={column.field} style={columnStyle(column)}>
+        <td role="gridcell" key={column.field} style={columnStyle(column)}>
           {column.editable ? (
             column.renderEditor ? (
               column.renderEditor({
@@ -1055,7 +1245,7 @@ function NewRowDraft({
         </td>
       ))}
       {hasRowActions && (
-        <td className="inandu-grid-row-actions">
+        <td role="gridcell" className="inandu-grid-row-actions">
           <button type="button" disabled={isValidating} onClick={onSave}>
             {t('MsgSaveRow')}
           </button>
@@ -1079,8 +1269,8 @@ interface RowGroupProps extends DataRowProps {
 function RowGroup({ group, columns, aggregateColumns, aggregateLabel, extraColumnCount, ...rowProps }: RowGroupProps) {
   return (
     <>
-      <tr className="inandu-grid-group-row">
-        <td colSpan={columns.length + extraColumnCount}>
+      <tr role="row" className="inandu-grid-group-row">
+        <td role="gridcell" colSpan={columns.length + extraColumnCount}>
           <strong>{group.key}</strong> ({group.rows.length})
           {aggregateColumns.length > 0 && (
             <span className="inandu-grid-group-aggregates">
@@ -1141,14 +1331,14 @@ function TreeRow({
   const toggleLabel = expanded ? t('MsgCollapseDetail') : t('MsgExpandDetail');
 
   return (
-    <tr aria-level={depth + 1} aria-expanded={expandable ? expanded : undefined} aria-selected={selectable ? isRowSelected(row) : undefined}>
+    <tr role="row" aria-level={depth + 1} aria-expanded={expandable ? expanded : undefined} aria-selected={selectable ? isRowSelected(row) : undefined}>
       {selectable && (
-        <td style={selectColumnStyle}>
+        <td role="gridcell" style={selectColumnStyle}>
           <input aria-label={t('MsgSelectRow', { index: rowIndex + 1 })} type="checkbox" checked={isRowSelected(row)} onChange={() => toggleRowSelection(row)} />
         </td>
       )}
       {columns.map((column, colIndex) => (
-        <td key={column.field} style={columnStyle(column)}>
+        <td role="gridcell" key={column.field} style={columnStyle(column)}>
           {colIndex === 0 ? (
             <span className="inandu-grid-tree-cell" style={{ paddingInlineStart: depth * 16 }}>
               {expandable ? (
@@ -1175,7 +1365,7 @@ function TreeRow({
           )}
         </td>
       ))}
-      {hasRowActions && <td className="inandu-grid-row-actions" />}
+      {hasRowActions && <td role="gridcell" className="inandu-grid-row-actions" />}
     </tr>
   );
 }
