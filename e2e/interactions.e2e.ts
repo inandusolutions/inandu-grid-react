@@ -108,7 +108,8 @@ test.describe('column layout', () => {
     expect(await fieldOrder(page)).toEqual(['name', 'role', 'team', 'salary', 'joined']);
   });
 
-  test('dragging the resize handle widens the column', async ({ page }) => {
+  test('dragging the resize handle widens the column', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'the resize handle listens to mouse events only: resizing a column by touch is not supported yet');
     const th = header(page, 'team');
     const before = (await th.boundingBox())!.width;
     const handle = th.locator('.inandu-grid-resize-handle');
@@ -165,7 +166,7 @@ test.describe('row reorder', () => {
 });
 
 test.describe('range selection and clipboard', () => {
-  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+  // Clipboard permissions are granted in playwright.config.ts for the Chromium projects; Firefox and WebKit cannot grant them.
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/#interactions');
@@ -193,19 +194,22 @@ test.describe('range selection and clipboard', () => {
     await expect(page.locator('.inandu-cell-range-selected')).toHaveCount(1);
   });
 
-  test('Ctrl+C copies the selected range as tab/newline separated text', async ({ page }) => {
+  test('Ctrl+C copies the selected range as tab/newline separated text', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'clipboard permissions can only be granted in Chromium');
     await drag(page, cellOf(body(page).nth(0), 'name'), cellOf(body(page).nth(1), 'team'));
     await page.keyboard.press('Control+C');
     await expect.poll(() => readClipboard(page)).toBe('Ada Lovelace\tResearch\nAlan Turing\tPlatform');
   });
 
-  test('Ctrl+C on a single cell copies its formatted value', async ({ page }) => {
+  test('Ctrl+C on a single cell copies its formatted value', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'clipboard permissions can only be granted in Chromium');
     await cellOf(body(page).nth(2), 'salary').click();
     await page.keyboard.press('Control+C');
     await expect.poll(() => readClipboard(page)).toMatch(/^\d[\d,.]*$/);
   });
 
-  test('Ctrl+V pastes a clipboard matrix starting at the focused cell', async ({ page }) => {
+  test('Ctrl+V pastes a clipboard matrix starting at the focused cell', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'clipboard permissions can only be granted in Chromium');
     await page.evaluate(() => navigator.clipboard.writeText('Pasted One\nPasted Two'));
     await cellOf(body(page).nth(1), 'name').click();
     await page.keyboard.press('Control+V');

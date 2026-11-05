@@ -9,6 +9,30 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+Needs `@inandu-solutions/grid-core` with the print and state helpers (the release after 0.1.2).
+
+### Added
+
+- **Accessibility.** The table is an ARIA grid (`role="grid"` with `row`, `columnheader` and `gridcell` roles). The grid is one
+  tab stop (the first header cell); the arrow keys, Home/End (Ctrl for first/last cell) and PageUp/PageDown move between
+  cells; Enter or Space on a header cell sorts. The polite live region now announces loading and errors as well as an empty
+  result (WCAG 4.1.3). **Breaking for tests:** query cells by `gridcell` (they were `cell`) and the table by `grid`.
+- **Props shared with `grid-angular`:** `loading`, `error`, `dir`, `theme`, `id`, `width`, `filter`, `filterPlaceholder`,
+  `showTotals`, `customTranslations`, `pinnedTopRows`, `pinnedBottomRows`, `stateKey` (+ `persist`) and the callbacks
+  `onSortChange`, `onFilterChange`, `onPageChange`. `filter` and `showTotals` default to `true` here (opt-in in Angular),
+  to keep the current behaviour.
+- `stateKey` saves column widths/order/visibility/pins, sort and filters to `localStorage` and restores them on mount. What is
+  read back is validated (`sanitizeGridState`); `persist` leaves parts out (the search text and filters can hold personal
+  data). `useInanduGrid` returns `clearPersistedState()`.
+
+### Fixed
+
+- `printTable` opens the print page through a `Blob` URL with `noopener` instead of writing it with `document.write` into a
+  same-origin window: the page has no `window.opener` and shares nothing with the app. The page prints itself once loaded.
+- **`jspdf` is an optional peer dependency** instead of a dependency. A project that never exports PDF no longer installs
+  it (and its `core-js` postinstall script). Install it with `npm install jspdf` to use PDF export; without it the export
+  rejects with a clear message.
+
 ## [0.4.0] - 2026-11-05
 
 Requires `@inandu-solutions/grid-core` ^0.1.2.

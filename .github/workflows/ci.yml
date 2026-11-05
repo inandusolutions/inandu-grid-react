@@ -34,6 +34,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The generated declarations must type-check on their own, with skipLibCheck off, the way a strict consumer sees them.
+      - name: Check the generated declarations
+        run: npm run check:dts
+
       - name: Audit production dependencies
         run: npm audit --omit=dev
 
@@ -95,3 +99,142 @@ jobs:
       - name: Compare server-queries.json with inandu-grid-extensions
         run: |
           diff -u <(sed 's/\r$//' _upstream/extensions/tests/Inandu.Grid.Extensions.Tests/Contract/server-queries.json) <(sed 's/\r$//' "$FIXTURE")
+
+  # The differential corpus must be identical in every repo that runs it (see the test that reads it). The canonical copy
+  # is inandu-grid-extensions tests/Inandu.Grid.Extensions.Tests/Contract/diff-corpus.json, pinned by EXT_REF. Until EXT_REF
+  # points at a commit that has the file, the check only says so; bump EXT_REF when the Extensions change is merged.
+  corpus-sync:
+    runs-on: ubuntu-latest
+    env:
+      EXT_REF: 7298765488cbdf8fffea663498c059ffef26d871    # inandusolutions/inandu-grid-extensions
+      CORPUS: src/hooks/contract/diff-corpus.json
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: inandusolutions/inandu-grid-extensions
+          ref: ${{ env.EXT_REF }}
+          path: _upstream/extensions
+
+      - name: Compare diff-corpus.json with inandu-grid-extensions
+        run: |
+          UPSTREAM=_upstream/extensions/tests/Inandu.Grid.Extensions.Tests/Contract/diff-corpus.json
+          if [ ! -f "$UPSTREAM" ]; then
+            echo "::notice::EXT_REF has no diff-corpus.json yet: bump EXT_REF once the Extensions change is merged."
+            exit 0
+          fi
+          diff -u <(sed 's/\r$//' "$UPSTREAM") <(sed 's/\r$//' "$CORPUS")
+
+  # The supported Node range (engines) is 20, 22 and 24. The test runner (vitest 5) needs Node >= 22.12, so the suite runs on 22 and 24
+  # and Node 20 is covered by `node20` below.
+  node-matrix:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+  # Node 20 consumers get the built package: build it on Node 20 and load both the ESM and the CJS entry.
+  node20:
+    name: node 20 / built package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 20
+          cache: npm
+
+      # Installing the dev tooling warns about engines on Node 20 (vitest, jsdom); only the build and the load check run here.
+      - run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Load the built package (ESM and CJS)
+        run: |
+          node --input-type=module -e "const m = await import('./dist/inandu-grid-react.js'); if (!m.InanduGrid) throw new Error('InanduGrid missing from ESM'); console.log(Object.keys(m).length, 'ESM exports')"
+          node -e "const m = require('./dist/inandu-grid-react.cjs'); if (!m.InanduGrid) throw new Error('InanduGrid missing from CJS'); console.log(Object.keys(m).length, 'CJS exports')"
+
+  # React 18 and 19, each plain and inside <React.StrictMode> (REACT_STRICT=1 makes the test setup wrap every render).
+  react-matrix:
+    name: react ${{ matrix.react }}${{ matrix.strict == '1' && ' (StrictMode)' || '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        react: [18, 19]
+        strict: ['', '1']
+    env:
+      REACT_STRICT: ${{ matrix.strict }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Use React ${{ matrix.react }}
+        run: npm install --no-save --ignore-scripts react@${{ matrix.react }} react-dom@${{ matrix.react }} @types/react@${{ matrix.react }} @types/react-dom@${{ matrix.react }}
+
+      - name: Unit tests
+        run: npm test
+
+  # Firefox, WebKit and a touch device (the main e2e job is Chromium only).
+  e2e-cross-browser:
+    name: e2e ${{ matrix.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [firefox, webkit, mobile-chrome]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - name: Install Playwright browser
+        # WebKit and Firefox need system libraries the runner image does not all ship, hence --with-deps here.
+        timeout-minutes: 10
+        run: npx playwright install --with-deps ${{ matrix.project == 'mobile-chrome' && 'chromium' || matrix.project }}
+
+      - name: E2E tests
+        run: npx playwright test --project=${{ matrix.project }} --workers=2
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-${{ matrix.project }}
+          path: playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

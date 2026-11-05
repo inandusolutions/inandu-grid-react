@@ -69,15 +69,22 @@
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test --project=chromium",
+    "e2e:all": "playwright test",
+    "check:dts": "node node_modules/typescript/bin/tsc --ignoreConfig --noEmit --skipLibCheck false --strict --target es2022 --module esnext --moduleResolution bundler --jsx react-jsx dist/index.d.ts"
   },
   "peerDependencies": {
+    "jspdf": "^4.2.1",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
+  "peerDependenciesMeta": {
+    "jspdf": {
+      "optional": true
+    }
+  },
   "dependencies": {
-    "@inandu-solutions/grid-core": "^0.1.2",
-    "jspdf": "^4.2.1"
+    "@inandu-solutions/grid-core": "^0.1.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -89,6 +96,7 @@
     "@typescript/typescript6": "^6.0.2",
     "@vitejs/plugin-react": "^6.1.2",
     "jsdom": "^30.1.3",
+    "jspdf": "^4.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "~7.0.2",

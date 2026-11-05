@@ -1,4 +1,4 @@
-import { InanduGridRow, downloadBlob, escapeCsvValue, escapeMarkup, formatCellValue, truncatePdfText } from '../core';
+import { InanduGridRow, downloadBlob, escapeCsvValue, escapeMarkup, formatCellValue, buildPrintHtml, printHtmlDocument, truncatePdfText } from '../core';
 import { InanduGridColumn } from '../hooks/useInanduGrid';
 
 function headerLabel(column: InanduGridColumn): string {
@@ -72,24 +72,26 @@ export function exportExcel(rows: InanduGridRow[], columns: InanduGridColumn[], 
 /**
  * Ported from grid-angular's `printTable()` — opens a new tab with a plain, print-styled `<table>`
  * of `rows` and triggers the browser's print dialog on it, rather than printing the live page
- * (which would include the toolbar, pager, and any surrounding app chrome).
+ * (which would include the toolbar, pager, and any surrounding app chrome). The page is a `Blob` URL opened with
+ * `noopener`, so it has no handle back to the app.
  */
 export function printTable(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string, title = 'inandu-grid'): void {
-  const headerCells = columns.map(column => `<th>${escapeMarkup(headerLabel(column))}</th>`).join('');
-  const bodyRows = rows.map(row => `<tr>${columns.map(column => `<td>${escapeMarkup(cellValue(column, row, locale))}</td>`).join('')}</tr>`).join('');
-  const html =
-    '<!doctype html><html><head><meta charset="utf-8">' +
-    `<title>${escapeMarkup(title)}</title>` +
-    '<style>table{border-collapse:collapse;width:100%}th,td{border:1px solid #333;padding:4px 8px;text-align:left}th{background:#eee}</style>' +
-    `</head><body><table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></body></html>`;
+  printHtmlDocument(
+    buildPrintHtml(
+      title,
+      columns.map(headerLabel),
+      rows.map(row => columns.map(column => cellValue(column, row, locale))),
+    ),
+  );
+}
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return;
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  // Lets the popup finish parsing/laying out the document before the print dialog opens on it.
-  setTimeout(() => printWindow.print(), 0);
+/** Loads `jspdf` on demand. It is an optional peer dependency: a project that never exports PDF does not install it. */
+async function loadJsPdf(): Promise<typeof import('jspdf')> {
+  try {
+    return await import('jspdf');
+  } catch (error) {
+    throw new Error('PDF export needs the "jspdf" package: run `npm install jspdf`.', { cause: error });
+  }
 }
 
 export async function exportPdf(
@@ -98,7 +100,7 @@ export async function exportPdf(
   locale: string,
   filenameBase = 'inandu-grid',
 ): Promise<void> {
-  const { jsPDF: JsPdf } = await import('jspdf');
+  const { jsPDF: JsPdf } = await loadJsPdf();
   const headerValues = columns.map(headerLabel);
 
   const doc = new JsPdf({ orientation: 'landscape' });
