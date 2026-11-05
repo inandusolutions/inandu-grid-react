@@ -9,7 +9,9 @@ entries below start from the next release.
 
 ## [Unreleased]
 
-Needs `@inandu-solutions/grid-core` 0.1.2.
+## [0.4.0] - 2026-11-05
+
+Requires `@inandu-solutions/grid-core` ^0.1.2.
 
 ### Fixed
 
