@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useInanduGrid } from './useInanduGrid';
 
 const columns = [
@@ -224,5 +224,42 @@ describe('useInanduGrid: rowId', () => {
     });
 
     expect(result.current.visibleRows.length).toBe(3); // root collapsed (1) + new root + its child
+  });
+});
+
+describe('useInanduGrid: grid-core 0.1.2 behaviour', () => {
+  const editable = [
+    { field: 'name', headerText: 'Name', editable: true },
+    { field: 'qty', headerText: 'Qty', type: 'number' as const, editable: true },
+    { field: 'on', headerText: 'On', type: 'boolean' as const, editable: true },
+  ];
+
+  it('pastes a number in the locale of the grid and skips what a column cannot hold', () => {
+    const onCellsPaste = vi.fn();
+    const data = [{ name: 'a', qty: 1, on: false }];
+    const { result } = renderHook(() => useInanduGrid({ rows: data, columns: editable, locale: 'es', onCellsPaste }));
+
+    act(() => result.current.pasteAt(0, 'name', 'x\t1.234,5\tquizás'));
+
+    expect(onCellsPaste).toHaveBeenCalledWith([
+      { row: data[0], field: 'name', value: 'x' },
+      { row: data[0], field: 'qty', value: 1234.5 },
+    ]); // 'quizás' is not a boolean: that cell is left alone
+  });
+
+  it('sorts a numeric column by value even when the cells are text', () => {
+    const data = [{ qty: '10' }, { qty: '9' }, { qty: '2' }];
+    const { result } = renderHook(() => useInanduGrid({ rows: data, columns: [{ field: 'qty', type: 'number' as const }] }));
+    act(() => result.current.setSort([{ field: 'qty', direction: 'asc' }]));
+
+    expect(result.current.sortedRows.map(r => r.qty)).toEqual(['2', '9', '10']);
+  });
+
+  it('shows and filters dates in the timeZone of the column', () => {
+    const data = [{ at: '2024-01-05T00:00:00Z' }];
+    const cols = [{ field: 'at', type: 'date' as const, format: 'YYYY-MM-DD', timeZone: 'America/Bogota' }];
+    const { result } = renderHook(() => useInanduGrid({ rows: data, columns: cols }));
+
+    expect(result.current.copyCellText(0, 'at')).toBe('2024-01-04');
   });
 });

@@ -6,7 +6,7 @@ function headerLabel(column: InanduGridColumn): string {
 }
 
 function cellValue(column: InanduGridColumn, row: InanduGridRow, locale: string): string {
-  return formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale);
+  return formatCellValue(row[column.field], column.type ?? 'string', column.format ?? '', locale, undefined, column.timeZone);
 }
 
 /**
