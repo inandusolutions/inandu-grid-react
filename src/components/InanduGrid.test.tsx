@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
@@ -988,5 +989,44 @@ describe('InanduGrid: stateKey', () => {
     render(<InanduGrid rows={rows} columns={columns} stateKey="react-test" persist={['sortCriteria']} />);
     fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'secret' } });
     expect(localStorage.getItem(KEY)).not.toContain('secret');
+  });
+});
+
+describe('InanduGrid under React.StrictMode', () => {
+  it('does not report sort, filter or page changes for the initial state, although effects run twice', () => {
+    const onSortChange = vi.fn();
+    const onFilterChange = vi.fn();
+    const onPageChange = vi.fn();
+    render(
+      <StrictMode>
+        <InanduGrid rows={rows} columns={columns} pageSize={1} stateKey="strict-test" onSortChange={onSortChange} onFilterChange={onFilterChange} onPageChange={onPageChange} />
+      </StrictMode>,
+    );
+    expect(onSortChange).not.toHaveBeenCalled();
+    expect(onFilterChange).not.toHaveBeenCalled();
+    expect(onPageChange).not.toHaveBeenCalled();
+    localStorage.removeItem('inandu-grid-state:strict-test');
+  });
+
+  it('reports one change per user action, not two', () => {
+    const onSortChange = vi.fn();
+    render(
+      <StrictMode>
+        <InanduGrid rows={rows} columns={columns} onSortChange={onSortChange} />
+      </StrictMode>,
+    );
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Sort by Name' }));
+    expect(onSortChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onSelectionChange with the right selection after the double effect', () => {
+    const onSelectionChange = vi.fn();
+    render(
+      <StrictMode>
+        <InanduGrid rows={rows} columns={columns} selectable onSelectionChange={onSelectionChange} />
+      </StrictMode>,
+    );
+    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    expect(onSelectionChange).toHaveBeenLastCalledWith([rows[0]]);
   });
 });

@@ -69,7 +69,9 @@
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test --project=chromium",
+    "e2e:all": "playwright test",
+    "check:dts": "node node_modules/typescript/bin/tsc --ignoreConfig --noEmit --skipLibCheck false --strict --target es2022 --module esnext --moduleResolution bundler --jsx react-jsx dist/index.d.ts"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
