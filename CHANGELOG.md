@@ -9,7 +9,7 @@ entries below start from the next release.
 
 ## [Unreleased]
 
-Needs `@inandu-solutions/grid-core` with the print and state helpers (the release after 0.1.2).
+## [0.5.0] - 2026-11-05
 
 ### Added
 
@@ -115,7 +115,8 @@ grid does not implement.
 
 - `InanduEditRenderContext`: document that `renderEditor` receives the raw control shape, so arrays and objects arrive as text, and how to handle them.
 
-[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.1...v0.2.2
