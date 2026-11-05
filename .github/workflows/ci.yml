@@ -126,14 +126,15 @@ jobs:
           fi
           diff -u <(sed 's/\r$//' "$UPSTREAM") <(sed 's/\r$//' "$CORPUS")
 
-  # The supported Node range (engines): 20, 22 and 24.
+  # The supported Node range (engines) is 20, 22 and 24. The test runner (vitest 5) needs Node >= 22.12, so the suite runs on 22 and 24
+  # and Node 20 is covered by `node20` below.
   node-matrix:
     name: node ${{ matrix.node }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22, 24]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -149,6 +150,32 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+  # Node 20 consumers get the built package: build it on Node 20 and load both the ESM and the CJS entry.
+  node20:
+    name: node 20 / built package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 20
+          cache: npm
+
+      # Installing the dev tooling warns about engines on Node 20 (vitest, jsdom); only the build and the load check run here.
+      - run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Load the built package (ESM and CJS)
+        run: |
+          node --input-type=module -e "const m = await import('./dist/inandu-grid-react.js'); if (!m.InanduGrid) throw new Error('InanduGrid missing from ESM'); console.log(Object.keys(m).length, 'ESM exports')"
+          node -e "const m = require('./dist/inandu-grid-react.cjs'); if (!m.InanduGrid) throw new Error('InanduGrid missing from CJS'); console.log(Object.keys(m).length, 'CJS exports')"
 
   # React 18 and 19, each plain and inside <React.StrictMode> (REACT_STRICT=1 makes the test setup wrap every render).
   react-matrix:
