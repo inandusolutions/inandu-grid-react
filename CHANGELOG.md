@@ -9,6 +9,20 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-19
+
+### Changed
+
+- Depends on `@inandu-solutions/grid-core` `^0.1.4` (it was `^0.1.3`). 0.1.4 stops the published declarations from importing the types of
+  `jspdf`, an optional peer: with `skipLibCheck: false` and no jspdf installed they raised `TS2307`. `jspdf` stays an optional peer of this
+  package for PDF export. No change to this package's own API.
+
+### Added (tooling, no effect on the published code)
+
+- CI checks for the package: the exported API against the committed `api/public-api.txt` (`npm run api:check`), size budgets, lazy `jspdf`
+  and tarball contents (`npm run check:package`), and a smoke test that installs the packed tarball in an empty project, type-checks a
+  react consumer and loads the ESM and CJS entries (`npm run smoke:package`). The cross-browser e2e job runs in the official Playwright image.
+
 ## [0.5.0] - 2026-11-05
 
 ### Added
@@ -115,7 +129,8 @@ grid does not implement.
 
 - `InanduEditRenderContext`: document that `renderEditor` receives the raw control shape, so arrays and objects arrive as text, and how to handle them.
 
-[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.2...v0.2.3

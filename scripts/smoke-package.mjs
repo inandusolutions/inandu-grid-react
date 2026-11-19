@@ -3,7 +3,7 @@
 // project and checks that a consumer can use it:
 //   1. `npm install` resolves the package with only its declared peers (React and TypeScript at the repo's versions).
 //   2. A component using <InanduGrid> type-checks under strict TypeScript with the react-jsx transform, once with the usual
-//      settings (skipLibCheck on, no jspdf installed) and once strict (skipLibCheck off, jspdf installed).
+//      settings (skipLibCheck on) and once strict (skipLibCheck off), neither with jspdf installed (it is an optional peer).
 //   3. The ESM entry (import) and the CJS entry (require) both load in Node and expose the grid, and `style.css` resolves.
 // Run after `npm run build`:  npm run smoke:package
 import { execFileSync } from 'node:child_process';
@@ -53,8 +53,8 @@ try {
       2,
     ),
   );
-  // Two consumers: the common setup (skipLibCheck on, no jspdf installed) and a strict one (skipLibCheck off, jspdf installed
-  // because the declarations of grid-core reference its types until grid-core drops that import).
+  // Two consumers, neither with jspdf installed (an optional peer): the common setup (skipLibCheck on) and a strict one (skipLibCheck off),
+  // which fails if any published declaration, grid-core's included, imports a package that is not installed.
   const tsconfig = (skipLibCheck) =>
     JSON.stringify(
       { compilerOptions: { target: 'ES2022', module: 'ES2022', moduleResolution: 'bundler', jsx: 'react-jsx', strict: true, noEmit: true, skipLibCheck, lib: ['ES2022', 'dom'] }, files: ['src/main.tsx', 'src/css.d.ts'] },
@@ -88,8 +88,7 @@ export function App() {
   console.log('tsc (strict, skipLibCheck on, no jspdf)...');
   tsc('tsconfig.json');
 
-  console.log('tsc (strict, skipLibCheck off, jspdf installed)...');
-  npm(['install', '--no-save', '--no-audit', '--no-fund', '--ignore-scripts', '--loglevel=error', `jspdf@${version('jspdf')}`], app);
+  console.log('tsc (strict, skipLibCheck off)...');
   tsc('tsconfig.strict.json');
 
   console.log('node import + require...');
