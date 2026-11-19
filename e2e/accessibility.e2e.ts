@@ -21,6 +21,8 @@ const RULES = [
   'th-has-data-cells',
   'td-headers-attr',
   'duplicate-id-aria',
+  // WCAG 2.2 SC 2.5.8: every control is at least 24x24 CSS px (or has the spacing the criterion allows instead).
+  'target-size',
 ];
 
 test.beforeEach(async ({ page }) => {
@@ -31,6 +33,20 @@ test.beforeEach(async ({ page }) => {
 test('the basics grid has no ARIA or structure violations', async ({ page }) => {
   const results = await new AxeBuilder({ page }).include('table.inandu-grid').withRules(RULES).analyze();
   expect(results.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target.join(' ')).slice(0, 3) }))).toEqual([]);
+});
+
+test('selection and column-toggle checkboxes are at least 24x24 CSS px', async ({ page }) => {
+  // axe's target-size rule also passes small controls that are spaced apart; a checkbox is still a poor target at 13px, so the
+  // stylesheet gives them 24px, as grid-angular does.
+  await page.locator('summary', { hasText: /columns/i }).first().click();
+  const sizes = await page
+    .locator('.inandu-grid-react input[type="checkbox"]')
+    .evaluateAll(els => els.map(el => [Math.round(el.getBoundingClientRect().width), Math.round(el.getBoundingClientRect().height)]));
+  expect(sizes.length).toBeGreaterThan(8);
+  for (const [width, height] of sizes) {
+    expect(width).toBeGreaterThanOrEqual(24);
+    expect(height).toBeGreaterThanOrEqual(24);
+  }
 });
 
 test('sorting exposes aria-sort', async ({ page }) => {

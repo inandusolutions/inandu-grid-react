@@ -9,6 +9,11 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+### Changed
+
+- The default stylesheet (`@inandu-solutions/grid-react/style.css`) makes the checkboxes (select all, row selection, column toggle, boolean cells) at
+  least 24x24 CSS px, the target size of WCAG 2.2 SC 2.5.8, as `grid-angular` does. They were 13px. Only the checkbox box changes; rows keep their height.
+
 ## [0.5.1] - 2026-11-19
 
 ### Changed
