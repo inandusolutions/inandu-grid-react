@@ -99,7 +99,7 @@ export function FeatureExplorer({ onOpenDemo }: { onOpenDemo: (tab: DemoTab) => 
         <div className="explorer-actions">
           {active.demo && (
             <button className="btn solid" type="button" onClick={() => onOpenDemo(active.demo!)}>
-              See it running ↑
+              Try the live demo ↑
             </button>
           )}
           <a className="btn" href={readme(active.doc)}>
