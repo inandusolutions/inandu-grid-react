@@ -9,6 +9,23 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Row editing: cancelling, or starting another row, while an `asyncValidator` is still running no longer saves the row afterwards.
+  The check that was meant to catch this compared against a value captured when the save started, so it never noticed. The same
+  applies to adding a row (`onRowCreate`).
+- Row editing: pressing Save twice while an `asyncValidator` runs now saves once, not twice.
+- Row editing: an `asyncValidator` that throws (a network error, say) is shown as the message of its field and the row stays in edit
+  mode. Before, the click was left with an unhandled promise rejection and no message.
+- `virtualScroll` with the keyboard: a fast run of ArrowDown or PageDown no longer loses keys at the edge of the window, Ctrl+End goes
+  to the last row of the data (it stopped at the last mounted row), and if the focused cell scrolls out of the window focus waits on the
+  grid and returns to the cell, instead of falling to `<body>`. The scrollable area is focusable by code (`tabindex="-1"`).
+
+### Added
+
+- `ACCESSIBILITY.md`: what is checked automatically, the keyboard table, and a manual checklist. The README documents the fixed row
+  height of `virtualScroll` as a known limitation.
+
 ### Changed
 
 - The default stylesheet (`@inandu-solutions/grid-react/style.css`) makes the checkboxes (select all, row selection, column toggle, boolean cells) at
