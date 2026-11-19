@@ -9,6 +9,8 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-19
+
 ### Fixed
 
 - Row editing: cancelling, or starting another row, while an `asyncValidator` is still running no longer saves the row afterwards.
@@ -31,6 +33,8 @@ entries below start from the next release.
   that is not an `Error`; before, a thrown object showed as `[object Object]`.
 
 ### Changed
+
+- Depends on `@inandu-solutions/grid-core` `^0.1.5` (it was `^0.1.4`). 0.1.5 fixes `truncatePdfText`, which cut an emoji in half in the PDF export.
 
 - Row editing: typing while an `asyncValidator` is still checking a Save now invalidates that check. The older values are not saved, what
   was typed is kept, and pressing Save again checks and saves the new values. Before, the older values were saved and the new typing was
