@@ -71,7 +71,11 @@
     "test:watch": "vitest",
     "e2e": "playwright test --project=chromium",
     "e2e:all": "playwright test",
-    "check:dts": "node node_modules/typescript/bin/tsc --ignoreConfig --noEmit --skipLibCheck false --strict --target es2022 --module esnext --moduleResolution bundler --jsx react-jsx dist/index.d.ts"
+    "api:check": "node scripts/api-snapshot.mjs",
+    "api:update": "node scripts/api-snapshot.mjs --update",
+    "check:package": "node scripts/check-package.mjs",
+    "smoke:package": "node scripts/smoke-package.mjs",
+    "check:dts":"node node_modules/typescript/bin/tsc --ignoreConfig --noEmit --skipLibCheck false --strict --target es2022 --module esnext --moduleResolution bundler --jsx react-jsx dist/index.d.ts"
   },
   "peerDependencies": {
     "jspdf": "^4.2.1",
