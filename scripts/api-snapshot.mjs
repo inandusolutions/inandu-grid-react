@@ -95,7 +95,11 @@ function describeSignature(name, signature, node) {
     const optional = decl && ts.isParameter(decl) && (decl.questionToken || decl.initializer) ? '?' : '';
     return `${label}${optional}: ${typeText(checker.getTypeOfSymbolAtLocation(p, node), node)}`;
   });
-  const head = `function ${name}(${params.join(', ')})`;
+  const typeParams = (signature.typeParameters ?? []).map((tp) => {
+    const constraint = checker.getBaseConstraintOfType(tp);
+    return constraint && constraint.flags !== ts.TypeFlags.Unknown ? `${tp.symbol.name} extends ${typeText(constraint, node)}` : tp.symbol.name;
+  });
+  const head = `function ${name}${typeParams.length ? `<${typeParams.join(', ')}>` : ''}(${params.join(', ')})`;
   const ret = checker.getReturnTypeOfSignature(signature);
   const anonymous = ret.flags & ts.TypeFlags.Object && !ret.aliasSymbol && ret.symbol?.name === '__type' && checker.getPropertiesOfType(ret).length > 0;
   return anonymous ? [`${head}: {`, ...propertyLines(ret, node, '  '), '}'] : [`${head}: ${typeText(ret, node)}`];
