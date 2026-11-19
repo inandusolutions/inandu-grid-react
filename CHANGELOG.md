@@ -25,8 +25,16 @@ entries below start from the next release.
 
 - `ACCESSIBILITY.md`: what is checked automatically, the keyboard table, and a manual checklist. The README documents the fixed row
   height of `virtualScroll` as a known limitation.
+- Column option `asyncValidatorError`: what the user sees when the `asyncValidator` itself fails (it throws or rejects), as opposed to
+  answering with a message. It receives what was thrown and returns the text to show, so technical or server messages can be kept out of the
+  interface. Without it the `message` of an `Error` is shown, and a fixed generic text ("Validation could not be completed") for anything
+  that is not an `Error`; before, a thrown object showed as `[object Object]`.
 
 ### Changed
+
+- Row editing: typing while an `asyncValidator` is still checking a Save now invalidates that check. The older values are not saved, what
+  was typed is kept, and pressing Save again checks and saves the new values. Before, the older values were saved and the new typing was
+  silently discarded. Applies to adding a row too.
 
 - The default stylesheet (`@inandu-solutions/grid-react/style.css`) makes the checkboxes (select all, row selection, column toggle, boolean cells) at
   least 24x24 CSS px, the target size of WCAG 2.2 SC 2.5.8, as `grid-angular` does. They were 13px. Only the checkbox box changes; rows keep their height.

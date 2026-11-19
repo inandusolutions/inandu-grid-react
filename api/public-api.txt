@@ -46,6 +46,7 @@ interface InanduGridCellRangeSelection
 interface InanduGridColumn
   aggregate?: InanduColumnAggregate | undefined
   asyncValidator?: ((parsed: unknown, parsedRow: Record<string, unknown>) => Promise<string | null>) | undefined
+  asyncValidatorError?: ((error: unknown) => string) | undefined
   editable?: boolean | undefined
   field: string
   format?: string | undefined

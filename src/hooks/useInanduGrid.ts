@@ -58,6 +58,13 @@ export interface InanduGridColumn {
   validator?: (parsed: unknown, parsedRow: Record<string, unknown>) => string | null;
   /** Runs only once every synchronous rule (above) has already passed for this field; every field's async check runs concurrently. */
   asyncValidator?: (parsed: unknown, parsedRow: Record<string, unknown>) => Promise<string | null>;
+  /**
+   * What to show under the field when `asyncValidator` itself fails (it throws or rejects: a network error, a server error), as opposed
+   * to answering with a message. Receives whatever was thrown and returns the text for the user. Without it the grid shows the
+   * `message` of an `Error`, which can be a technical or raw server message, and a fixed generic text for anything that is not an
+   * `Error`. Use it to show your own wording (and to keep technical details out of the interface). If it throws, the generic text is shown.
+   */
+  asyncValidatorError?: (error: unknown) => string;
   /** Whether this column can be hidden via the column-visibility toggle. Default: true. */
   hideable?: boolean;
   /** Pins the column to that side of the table, `position: sticky`, regardless of scroll. Unset: not pinned. */
@@ -111,6 +118,24 @@ export interface InanduGridCellPaste {
   row: InanduGridRow;
   field: string;
   value: unknown;
+}
+
+/** Shown under a field when its `asyncValidator` failed and there is nothing better to show (not an `Error`, or `asyncValidatorError` threw). */
+const ASYNC_VALIDATOR_FAILED_MESSAGE = 'Validation could not be completed';
+
+/** The text for a field whose `asyncValidator` threw: the column's `asyncValidatorError` if it has one, else the `Error`'s message. */
+function asyncValidatorFailureMessage(column: InanduGridColumn, error: unknown): string {
+  try {
+    if (column.asyncValidatorError) {
+      const message = column.asyncValidatorError(error);
+      if (typeof message === 'string' && message) return message;
+    } else if (error instanceof Error && error.message) {
+      return error.message;
+    }
+  } catch {
+    /* the consumer's own formatter failed: fall through to the generic text */
+  }
+  return ASYNC_VALIDATOR_FAILED_MESSAGE;
 }
 
 function toColumnConfig(column: InanduGridColumn): ColumnConfig {
@@ -843,6 +868,10 @@ export function useInanduGrid({
   }
 
   function setRowDraftValue(field: string, value: unknown): void {
+    // Typing while a Save is still checking the draft makes that check about values that are no longer the draft. Starting a new session
+    // lets the running save stand down when its check returns, so the older values are not saved and what was just typed is kept; the
+    // user presses Save again for the new values.
+    if (savingSessionRef.current !== null) editSessionRef.current += 1;
     setRowDraft(prev => ({ ...prev, [field]: value }));
   }
 
@@ -908,7 +937,7 @@ export function useInanduGrid({
           // A validator that throws (a network error, say) is a failed check, shown under its field: the row stays in edit mode and the
           // click handler is not left with a rejected promise nobody handles.
           .catch((error: unknown) => {
-            errors[field] = error instanceof Error && error.message ? error.message : String(error);
+            errors[field] = asyncValidatorFailureMessage(column, error);
           }),
       );
     }
