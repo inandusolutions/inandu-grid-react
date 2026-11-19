@@ -138,6 +138,24 @@ describe('row editing with an async validator', () => {
     expect(result.current.editingRow).toBeUndefined();
   });
 
+  it('cancelling and editing the SAME row again while the validator runs does not save the old attempt', async () => {
+    const gate = deferred<string | null>();
+    const { result, onRowSave } = setup(withAsync(() => gate.promise));
+    act(() => result.current.startEditingRow(people[0]));
+    let saving!: Promise<void>;
+    act(() => {
+      saving = result.current.saveRow(people[0]);
+    });
+    act(() => result.current.cancelRowEdit());
+    act(() => result.current.startEditingRow(people[0]));
+    await act(async () => {
+      gate.resolve(null);
+      await saving;
+    });
+    expect(onRowSave).not.toHaveBeenCalled();
+    expect(result.current.editingRow).toBe(people[0]);
+  });
+
   it('starting another row while the validator runs means the first row is never saved', async () => {
     const gate = deferred<string | null>();
     const { result, onRowSave } = setup(withAsync(() => gate.promise));
