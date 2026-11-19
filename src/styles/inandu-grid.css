@@ -57,6 +57,15 @@
   opacity: 0.6;
 }
 
+/* Checkboxes (select all, row selection, column toggle, boolean cells) are at least 24x24 CSS px, the target size WCAG 2.2 SC 2.5.8 asks for. */
+.inandu-grid-react input[type='checkbox'] {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
 .inandu-grid-react input[type='text'],
 .inandu-grid-react input[type='number'],
 .inandu-grid-react input[type='date'],
