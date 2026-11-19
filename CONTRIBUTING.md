@@ -69,3 +69,19 @@ etc. Keep the subject line under ~72 characters; explain the *why* in the body w
 
 Fill in the PR template. Small, focused PRs are easier to review than one that bundles several
 unrelated changes — split them if you can.
+
+## Dependency updates
+
+Dependabot opens its pull requests on Mondays: one run for npm and one for GitHub Actions. Packages that peer-pin each other are grouped, so they move together in one pull request instead of breaking each other in separate ones:
+
+- **react**: `react`, `react-dom` and their `@types`. `react-dom` peer-pins `react`.
+- **vite**: `vite`, `vitest`, `@vitejs/*` and `vite-plugin-dts`. They peer-depend on Vite.
+
+Every other development dependency gets one grouped pull request for minor and patch updates. Major updates are never grouped: each one is its own pull request, read and decided on its own.
+
+Rules for these pull requests:
+
+- They need the same green checks as any other pull request, and nothing is merged with a failing or skipped check.
+- A group is merged as a whole. If one package in it breaks the build, fix or hold the whole group; do not split it by hand, because the packages are grouped exactly because they cannot move apart.
+- The GitHub Pages site (`site/`) and the StackBlitz example (`examples/stackblitz/`) are consumer apps, not the library: they get one grouped pull request per directory for minor and patch updates.
+- Runtime dependencies are few on purpose. A pull request that adds one needs a reason in its description.
