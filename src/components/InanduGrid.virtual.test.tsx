@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { InanduGrid } from './InanduGrid';
+import type { InanduGridRow } from '@inandu-solutions/grid-react';
 
 /** Virtual scroll with many rows (review point C2): data that arrives late, a viewport that is resized, scroll set from code. */
 const columns = [
@@ -14,7 +15,7 @@ const ids = (c: HTMLElement) => body(c).map(tr => Number(tr.getAttribute('data-r
 const viewport = (c: HTMLElement) => c.querySelector('.inandu-grid-viewport') as HTMLElement;
 const scrollTo = (c: HTMLElement, top: number) => fireEvent.scroll(viewport(c), { target: { scrollTop: top } });
 
-const grid = (rows: object[], height = 200) => (
+const grid = (rows: InanduGridRow[], height = 200) => (
   <InanduGrid rows={rows} columns={columns} virtualScroll virtualRowHeight={20} height={height} overscan={2} />
 );
 
