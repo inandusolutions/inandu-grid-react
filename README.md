@@ -126,6 +126,18 @@ trusted (ported verbatim, same DOM APIs) rather than end-to-end tested; see
 [`measureColumn.ts`](src/utils/measureColumn.ts)'s doc comment for exactly what its test suite does
 and doesn't cover.
 
+### Known limitation: virtual scroll has a fixed row height
+
+`virtualScroll` assumes every row is exactly `virtualRowHeight` pixels tall (default 40). The scrollbar length and the position of the
+window are computed from that number, so a row that is taller (wrapped text, a custom cell that grows) makes the scroll position drift
+against the rows. Keep cells to one line, or set `virtualRowHeight` to the real height. Variable row height is not supported and is
+not currently scheduled; if you need it, open an issue describing the case.
+
+Virtual scroll replaces pagination, and it does not combine with grouping (grouping a virtual grid turns virtualization off), master/detail,
+the row drag handle, the totals row or cell range selection.
+
+For keyboard behaviour on a virtual grid, and the manual accessibility checklist, see [`ACCESSIBILITY.md`](ACCESSIBILITY.md).
+
 ## API shape
 
 ```tsx

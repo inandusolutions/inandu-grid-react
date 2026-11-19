@@ -271,8 +271,25 @@ export function useInanduGrid({
   // Selection remembers each selected row by its key; the stored object is refreshed whenever the same key shows up in `rows`.
   const [selectedByKey, setSelectedByKey] = useState<Map<unknown, InanduGridRow>>(new Map());
   const selectedRows = useMemo(() => new Set(selectedByKey.values()), [selectedByKey]);
-  const [editingRow, setEditingRow] = useState<InanduGridRow | undefined>(undefined);
-  const [isAddingRow, setIsAddingRow] = useState(false);
+  const [editingRow, setEditingRowState] = useState<InanduGridRow | undefined>(undefined);
+  const [isAddingRow, setIsAddingRowState] = useState(false);
+  // What an `await` inside saveRow/saveNewRow must compare against after an async validator: refs, not the state captured when the
+  // function was created, which never changes under a call that is already running. `editSession` moves on every start, cancel and
+  // save, so a save that finds a different session when its validator returns was cancelled or replaced meanwhile and must stand down.
+  const editingRowRef = useRef<InanduGridRow | undefined>(undefined);
+  const isAddingRowRef = useRef(false);
+  const editSessionRef = useRef(0);
+  const savingSessionRef = useRef<number | null>(null);
+  function setEditingRow(row: InanduGridRow | undefined): void {
+    editingRowRef.current = row;
+    editSessionRef.current += 1;
+    setEditingRowState(row);
+  }
+  function setIsAddingRow(adding: boolean): void {
+    isAddingRowRef.current = adding;
+    editSessionRef.current += 1;
+    setIsAddingRowState(adding);
+  }
   const [rowDraft, setRowDraft] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
@@ -882,10 +899,17 @@ export function useInanduGrid({
         continue;
       }
       pendingAsyncChecks.push(
-        column.asyncValidator(parsedRow[field], parsedRow).then(asyncMessage => {
-          if (asyncMessage) errors[field] = asyncMessage;
-          else if (parsedRow[field] !== undefined) values[field] = parsedRow[field];
-        }),
+        column
+          .asyncValidator(parsedRow[field], parsedRow)
+          .then(asyncMessage => {
+            if (asyncMessage) errors[field] = asyncMessage;
+            else if (parsedRow[field] !== undefined) values[field] = parsedRow[field];
+          })
+          // A validator that throws (a network error, say) is a failed check, shown under its field: the row stays in edit mode and the
+          // click handler is not left with a rejected promise nobody handles.
+          .catch((error: unknown) => {
+            errors[field] = error instanceof Error && error.message ? error.message : String(error);
+          }),
       );
     }
     if (pendingAsyncChecks.length > 0) {
@@ -900,17 +924,24 @@ export function useInanduGrid({
   }
 
   async function saveRow(row: InanduGridRow): Promise<void> {
-    if (editingRow !== row) return;
-    const { errors, values } = await validateAndParseDraft(rowDraft);
-    if (editingRow !== row) return; // stale: cancelled (or a different row started editing) while awaiting an asyncValidator
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      return;
+    if (editingRowRef.current !== row) return;
+    const session = editSessionRef.current;
+    if (savingSessionRef.current === session) return; // Save pressed again while the first one is still validating
+    savingSessionRef.current = session;
+    try {
+      const { errors, values } = await validateAndParseDraft(rowDraft);
+      if (editSessionRef.current !== session) return; // stale: cancelled (or a different row started editing) while awaiting an asyncValidator
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        return;
+      }
+      setEditingRow(undefined);
+      setRowDraft({});
+      setFieldErrors({});
+      onRowSave?.({ row, values });
+    } finally {
+      if (savingSessionRef.current === session) savingSessionRef.current = null;
     }
-    setEditingRow(undefined);
-    setRowDraft({});
-    setFieldErrors({});
-    onRowSave?.({ row, values });
   }
 
   function deleteRow(row: InanduGridRow): void {
@@ -938,17 +969,24 @@ export function useInanduGrid({
   }
 
   async function saveNewRow(): Promise<void> {
-    if (!isAddingRow) return;
-    const { errors, values } = await validateAndParseDraft(rowDraft);
-    if (!isAddingRow) return; // stale: cancelled while awaiting an asyncValidator
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      return;
+    if (!isAddingRowRef.current) return;
+    const session = editSessionRef.current;
+    if (savingSessionRef.current === session) return; // Save pressed again while the first one is still validating
+    savingSessionRef.current = session;
+    try {
+      const { errors, values } = await validateAndParseDraft(rowDraft);
+      if (editSessionRef.current !== session) return; // stale: cancelled while awaiting an asyncValidator
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        return;
+      }
+      setIsAddingRow(false);
+      setRowDraft({});
+      setFieldErrors({});
+      onRowCreate?.(values);
+    } finally {
+      if (savingSessionRef.current === session) savingSessionRef.current = null;
     }
-    setIsAddingRow(false);
-    setRowDraft({});
-    setFieldErrors({});
-    onRowCreate?.(values);
   }
 
   /** The formatted text `Ctrl+C` would copy for the cell at `visibleRows[rowIndex]`/`field` — `''` if it doesn't resolve to a real, currently-paged cell. */

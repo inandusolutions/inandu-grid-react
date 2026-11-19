@@ -35,6 +35,9 @@ interface RangeRect {
   maxCol: number;
 }
 
+/** How long a keyboard move to a row that is not rendered yet may wait for that row before it is forgotten (milliseconds). */
+const PENDING_FOCUS_TTL_MS = 1500;
+
 function normalizeRange(anchor: { row: number; col: number }, focus: { row: number; col: number }): RangeRect {
   return {
     minRow: Math.min(anchor.row, focus.row),
@@ -369,10 +372,65 @@ export function InanduGrid({
   const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const tableRef = useRef<HTMLTableElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  /**
+   * A keyboard move to a row that is not mounted yet: the window scrolls there first, then this cell takes focus. It is about the rows
+   * as they were (`rows`) and about the moment of the key press (`at`): it is dropped when the rows change, when it has waited too long,
+   * and when focus has gone somewhere else on the page, so it can never pull focus away later.
+   */
+  const pendingFocusRef = useRef<{ row: number; col: number; at: number; rows: readonly InanduGridRow[] } | null>(null);
+  /**
+   * The cell that had focus when its row scrolled out of the virtual window: focus waits on the viewport and returns when the row is
+   * back. The row is remembered by its key (`rowReactKey`: the `rowId` / `id` value, or a counter per row object when there is none), not by
+   * its position, so a sort or a filter while focus waits does not hand focus to a different record.
+   */
+  const parkedFocusRef = useRef<{ key: string; col: number } | null>(null);
 
   useEffect(() => {
     onSelectionChange?.(Array.from(selectedRows));
   }, [selectedRows, onSelectionChange]);
+
+  // After every render of a virtual grid (no dependency list on purpose: what it waits for is the DOM of this render, and the refs it reads
+  // are not state; it returns at once when nothing is pending or parked). A keyboard move that had to scroll first, or a focused cell that
+  // was parked on the viewport while its row was out of the window, takes focus as soon as its row is mounted.
+  useEffect(() => {
+    if (!hasVirtualScroll) return;
+    const viewport = viewportRef.current;
+    const active = document.activeElement;
+    // Focus inside the grid, or on <body> (where it falls when the focused row unmounts), is the only state in which the grid may move it.
+    const focusInGrid = !active || active === document.body || active === viewport || !!viewport?.contains(active);
+
+    const pending = pendingFocusRef.current;
+    if (pending) {
+      if (pending.rows !== visibleRows || Date.now() - pending.at > PENDING_FOCUS_TTL_MS || !focusInGrid) {
+        pendingFocusRef.current = null; // the rows changed, it waited too long, or the user went elsewhere: the request is moot
+      } else {
+        const tr = tableRef.current?.querySelector(`tr[data-row-index="${pending.row}"]`);
+        if (tr) {
+          pendingFocusRef.current = null;
+          parkedFocusRef.current = null;
+          focusCellOfRow(tr, pending.col);
+        }
+        return;
+      }
+    }
+
+    const parked = parkedFocusRef.current;
+    if (!parked) return;
+    if (active !== viewport) {
+      if (active && active !== document.body) parkedFocusRef.current = null; // focus has moved on by itself
+      return;
+    }
+    const index = visibleRows.findIndex(row => rowReactKey(row) === parked.key);
+    if (index < 0) {
+      parkedFocusRef.current = null; // that record is gone (filtered out, removed): there is nothing to give focus back to
+      return;
+    }
+    const tr = tableRef.current?.querySelector(`tr[data-row-index="${index}"]`);
+    if (!tr) return; // its row is not in the window yet: keep waiting
+    parkedFocusRef.current = null;
+    focusCellOfRow(tr, parked.col);
+  });
 
   // sort / filter / page notifications: only on a change, never for the initial state.
   const mounted = useRef(false);
@@ -579,6 +637,84 @@ export function InanduGrid({
    * ten rows) and Enter or Space on a header cell sorts by it (Shift adds the column to the sort). Ignored while focus is
    * in a control inside a cell, so typing and arrows in an input keep working.
    */
+  /** Puts focus on cell `col` of `tr`, keeping the one-tab-stop (roving tabindex) rule. */
+  function focusCellOfRow(tr: Element, col: number): void {
+    const cells = Array.from(tr.querySelectorAll<HTMLElement>('[role="gridcell"]'));
+    const next = cells[Math.min(col, cells.length - 1)];
+    if (!next) return;
+    const previous = document.activeElement;
+    if (previous instanceof HTMLElement && previous !== next && tableRef.current?.contains(previous)) previous.tabIndex = -1;
+    next.tabIndex = 0;
+    next.focus();
+  }
+
+  /**
+   * Keyboard moves between data rows while `virtualScroll` is on. They work on the row *index*, not on the rows that happen to be
+   * mounted: a move to a row outside the window scrolls it into view first and focuses the cell when it has rendered. Without this,
+   * a fast run of arrow presses lost the keys that outran the window, PageDown stalled, and Ctrl+End stopped at the last mounted row.
+   * From the first row, ArrowUp / PageUp fall through to the header, as they do without virtualization.
+   */
+  function handleVirtualNavigation(event: ReactKeyboardEvent<HTMLTableElement>, rowEl: Element, col: number): boolean {
+    const current = Number(rowEl.getAttribute('data-row-index'));
+    const total = visibleRows.length;
+    if (!Number.isInteger(current) || total === 0) return false;
+    let target: number;
+    switch (event.key) {
+      case 'ArrowDown':
+        target = current + 1;
+        break;
+      case 'PageDown':
+        target = current + 10;
+        break;
+      case 'ArrowUp':
+        if (current === 0) return false;
+        target = current - 1;
+        break;
+      case 'PageUp':
+        if (current === 0) return false;
+        target = current - 10;
+        break;
+      case 'End':
+        if (!event.ctrlKey) return false;
+        target = total - 1;
+        break;
+      default:
+        return false;
+    }
+    target = Math.min(total - 1, Math.max(0, target));
+    event.preventDefault();
+    const mounted = tableRef.current?.querySelector(`tr[data-row-index="${target}"]`);
+    if (mounted) {
+      focusCellOfRow(mounted, col);
+      return true;
+    }
+    const viewport = viewportRef.current;
+    if (!viewport) return true;
+    pendingFocusRef.current = { row: target, col, at: Date.now(), rows: visibleRows };
+    viewport.scrollTop = Math.max(0, target * virtualRowHeight - height / 2);
+    setScrollTop(viewport.scrollTop);
+    return true;
+  }
+
+  /** Scroll handler of the virtual viewport: moves the window, and parks focus on the viewport if the focused row is about to unmount. */
+  function handleViewportScroll(event: React.UIEvent<HTMLDivElement>): void {
+    const top = event.currentTarget.scrollTop;
+    setScrollTop(top);
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !tableRef.current?.contains(active) || active.getAttribute('role') !== 'gridcell') return;
+    const rowEl = active.closest('tr[data-row-index]');
+    const index = Number(rowEl?.getAttribute('data-row-index'));
+    if (!rowEl || !Number.isInteger(index)) return;
+    const start = Math.max(0, Math.floor(top / virtualRowHeight) - overscan);
+    const end = Math.min(visibleRows.length, Math.ceil((top + height) / virtualRowHeight) + overscan);
+    if (index >= start && index < end) return;
+    const col = Array.from(rowEl.querySelectorAll('[role="gridcell"]')).indexOf(active);
+    const parkedRow = visibleRows[index];
+    if (!parkedRow) return;
+    parkedFocusRef.current = { key: rowReactKey(parkedRow), col: Math.max(0, col) };
+    event.currentTarget.focus({ preventScroll: true });
+  }
+
   function handleGridNavigation(event: ReactKeyboardEvent<HTMLTableElement>): boolean {
     const key = event.key;
     const target = event.target as HTMLElement;
@@ -598,6 +734,7 @@ export function InanduGrid({
     const table = cell.closest('table');
     if (!row || !table) return false;
     const cellsOf = (tr: Element) => Array.from(tr.querySelectorAll<HTMLElement>('[role="columnheader"], [role="gridcell"]'));
+    if (hasVirtualScroll && cell.getAttribute('role') === 'gridcell' && handleVirtualNavigation(event, row, cellsOf(row).indexOf(cell))) return true;
     const rows = Array.from(table.querySelectorAll<HTMLElement>('tr[role="row"]:not([aria-hidden="true"]):not(.inandu-grid-filter-row)')).filter(tr => cellsOf(tr).length > 0);
     const rowIndex = rows.indexOf(row as HTMLElement);
     const cells = cellsOf(row);
@@ -823,9 +960,11 @@ export function InanduGrid({
         </div>
       )}
       <div
+        ref={viewportRef}
         className={hasVirtualScroll ? 'inandu-grid-viewport' : undefined}
         style={hasVirtualScroll ? { height, overflow: 'auto' } : undefined}
-        onScroll={hasVirtualScroll ? e => setScrollTop(e.currentTarget.scrollTop) : undefined}
+        tabIndex={hasVirtualScroll ? -1 : undefined}
+        onScroll={hasVirtualScroll ? handleViewportScroll : undefined}
       >
       <table ref={tableRef} className="inandu-grid" role="grid" onKeyDown={handleTableKeyDown} aria-rowcount={ariaRowCount}>
         <thead>
