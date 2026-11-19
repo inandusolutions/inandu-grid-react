@@ -36,7 +36,15 @@ npm run typecheck    # tsc --noEmit
 npm test             # vitest run (jsdom + React Testing Library)
 npm run test:watch   # vitest, watch mode
 npm run build        # library build -> dist/ (also copies dist/style.css)
+npm run api:check    # after build: the exported API matches api/public-api.txt
+npm run api:update   # rewrite that snapshot (review the diff: it is the API change of the release)
+npm run check:package    # after build: jspdf on demand, size budgets, tarball contents, entry points
+npm run smoke:package    # after build: install the packed tarball in an empty project and type-check a consumer
 ```
+
+A pull request that changes the public API (a prop, an export, a type) has to include the updated `api/public-api.txt`; CI fails
+otherwise. The snapshot also lists what is re-exported from `@inandu-solutions/grid-core`, so a core upgrade that changes the
+surface needs `npm run api:update` too. Size budgets live in `scripts/check-package.mjs`: raise one there when the growth is intended.
 
 ## Before you open a PR
 

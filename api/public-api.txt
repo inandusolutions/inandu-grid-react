@@ -1,0 +1,306 @@
+const AGGREGATE_SYMBOLS: Record<"sum" | "avg" | "min" | "max" | "count", string>
+function buildCsv(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string): string
+function buildExcelXml(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string): string
+function buildInanduGridQuery(query: InanduGridServerQuery, options?: InanduGridQueryOptions | undefined): URLSearchParams
+function buildPrintHtml(title: string, headers: readonly string[], rows: readonly (readonly string[])[]): string
+interface ColumnConfig
+  aggregate: () => InanduColumnAggregate
+  field: () => string
+  format: () => string
+  order: () => number | undefined
+  timeZone?: (() => string | undefined) | undefined
+  type: () => InanduColumnType
+function compareCellValues(a: unknown, b: unknown, localeOrOptions?: string | CompareCellOptions | undefined): number
+function computeGroupAggregates(rows: InanduGridRow[], aggregateColumns: readonly ColumnConfig[]): Record<string, number>
+function createTranslator(lang: string, customTranslations?: Record<string, Record<string, string>> | undefined): (key: InanduGridMessageKey, params?: Record<string, string | number>) => string
+const en: <type of 1027 chars, sha1 be32e97744b9>
+const es: <type of 1027 chars, sha1 be32e97744b9>
+function exportCsv(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string, filenameBase?: string | undefined): void
+function exportExcel(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string, filenameBase?: string | undefined): void
+function exportPdf(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string, filenameBase?: string | undefined): Promise<void>
+function formatCellValue(value: unknown, type: InanduColumnType, format: string, locale: string, numberFormatter?: NumberFormatter | undefined, timeZone?: string | undefined): string
+const fr: <type of 1027 chars, sha1 be32e97744b9>
+const GRID_STATE_VERSION: 1
+const INANDU_GRID_TRANSLATIONS: Record<string, Record<string, string>>
+interface InanduCellRenderContext
+  field: string
+  row: InanduGridRow
+  value: unknown
+type InanduColumnAggregate = 'sum' | 'avg' | 'min' | 'max' | 'count' | ''
+type InanduColumnStickySide = 'left' | 'right'
+type InanduColumnType = 'string' | 'number' | 'boolean' | 'date'
+interface InanduEditRenderContext
+  error: string | undefined
+  field: string
+  row: InanduGridRow
+  setValue: (value: unknown) => void
+  value: unknown
+function InanduGrid(arg0: InanduGridProps): React.JSX.Element
+interface InanduGridCellPaste
+  field: string
+  row: InanduGridRow
+  value: unknown
+interface InanduGridCellRangeSelection
+  fields: string[]
+  rows: InanduGridRow[]
+interface InanduGridColumn
+  aggregate?: InanduColumnAggregate | undefined
+  asyncValidator?: ((parsed: unknown, parsedRow: Record<string, unknown>) => Promise<string | null>) | undefined
+  editable?: boolean | undefined
+  field: string
+  format?: string | undefined
+  groupable?: boolean | undefined
+  headerText?: string | undefined
+  hideable?: boolean | undefined
+  max?: number | undefined
+  min?: number | undefined
+  order?: number | undefined
+  pattern?: string | undefined
+  pinned?: InanduColumnStickySide | undefined
+  renderCell?: ((ctx: InanduCellRenderContext) => ReactNode) | undefined
+  renderEditor?: ((ctx: InanduEditRenderContext) => ReactNode) | undefined
+  renderHeader?: ((ctx: InanduHeaderRenderContext) => ReactNode) | undefined
+  reorder?: boolean | undefined
+  required?: boolean | undefined
+  timeZone?: string | undefined
+  type?: InanduColumnType | undefined
+  validator?: ((parsed: unknown, parsedRow: Record<string, unknown>) => string | null) | undefined
+  width?: number | undefined
+interface InanduGridColumnFilterValue
+  bool?: string | undefined
+  from?: string | undefined
+  max?: string | undefined
+  min?: string | undefined
+  text?: string | undefined
+  to?: string | undefined
+  values?: string[] | undefined
+interface InanduGridGroup
+  aggregates: Record<string, number>
+  key: string
+  rows: InanduGridRow[]
+type InanduGridMessageKey = keyof typeof en
+interface InanduGridProps
+  autosize?: boolean | undefined
+  bulkDeleteConfirmMessage?: string | undefined
+  cellRangeSelection?: boolean | undefined
+  clipboard?: boolean | undefined
+  columnToggle?: boolean | undefined
+  columns: InanduGridColumn[]
+  creatable?: boolean | undefined
+  customTranslations?: Record<string, Record<string, string>> | undefined
+  deletable?: boolean | undefined
+  deleteConfirmMessage?: string | undefined
+  dir?: "ltr" | "rtl" | "auto" | undefined
+  error?: string | undefined
+  exportFilenameBase?: string | undefined
+  exportable?: boolean | undefined
+  extraRowFilter?: ((row: InanduGridRow) => boolean) | undefined
+  filter?: boolean | undefined
+  filterPlaceholder?: string | undefined
+  height?: number | undefined
+  id?: string | undefined
+  lang?: string | undefined
+  loading?: boolean | undefined
+  locale?: string | undefined
+  multiRange?: boolean | undefined
+  onCellRangeChange?: ((selection: InanduGridCellRangeSelection | undefined) => void) | undefined
+  onCellRangesChange?: ((selections: InanduGridCellRangeSelection[]) => void) | undefined
+  onCellsPaste?: ((updates: InanduGridCellPaste[]) => void) | undefined
+  onFilterChange?: ((state: { query: string; columnFilters: Record<string, InanduGridColumnFilterValue>; }) => void) | undefined
+  onPageChange?: ((state: { page: number; pageSize: number; }) => void) | undefined
+  onQueryChange?: ((query: InanduGridServerQuery) => void) | undefined
+  onRowCreate?: ((values: Record<string, unknown>) => void) | undefined
+  onRowDelete?: ((row: InanduGridRow) => void) | undefined
+  onRowOrderChange?: ((rows: InanduGridRow[]) => void) | undefined
+  onRowSave?: ((event: InanduGridRowSave) => void) | undefined
+  onRowsDelete?: ((rows: InanduGridRow[]) => void) | undefined
+  onSelectionChange?: ((selectedRows: InanduGridRow[]) => void) | undefined
+  onSortChange?: ((criteria: InanduGridSort[]) => void) | undefined
+  overscan?: number | undefined
+  pageSize?: number | undefined
+  persist?: readonly InanduGridStatePart[] | undefined
+  pinnedBottomRows?: InanduGridRow[] | undefined
+  pinnedTopRows?: InanduGridRow[] | undefined
+  renderDetail?: ((row: InanduGridRow) => ReactNode) | undefined
+  rowId?: InanduGridRowId | undefined
+  rowReorder?: boolean | undefined
+  rows: InanduGridRow[]
+  selectable?: boolean | undefined
+  serverSide?: { totalItems: number; } | undefined
+  showTotals?: boolean | undefined
+  singleDetailExpand?: boolean | undefined
+  stateKey?: string | undefined
+  theme?: string | undefined
+  treeChildrenKey?: string | undefined
+  treeDefaultExpanded?: number | "none" | "all" | undefined
+  virtualRowHeight?: number | undefined
+  virtualScroll?: boolean | undefined
+  width?: number | undefined
+interface InanduGridQueryOptions
+  extraParams?: Record<string, string> | undefined
+type InanduGridRow = Record<string, unknown>
+type InanduGridRowId = string | ((row: InanduGridRow) => string | number)
+interface InanduGridRowSave
+  row: InanduGridRow
+  values: Record<string, unknown>
+interface InanduGridSavedState
+  columnFilters: Record<string, InanduGridColumnFilterValue>
+  columnWidths: Record<string, number>
+  filterQuery: string
+  hiddenFields: string[]
+  pinnedOverrides: Record<string, InanduColumnStickySide | "none">
+  reorderedFields: string[]
+  sortCriteria: { field: string; direction: "asc" | "desc"; }[]
+interface InanduGridServerOptions
+  debounceMs?: number | undefined
+  extraParams?: Record<string, string> | undefined
+  fetcher?: ((url: string, init: RequestInit) => Promise<Response>) | undefined
+  init?: RequestInit | undefined
+  url: string
+interface InanduGridServerQuery
+  filterQuery: string
+  filterValues: Record<string, InanduGridColumnFilterValue>
+  page: number
+  pageSize: number
+  sortCriteria: InanduGridSort[]
+interface InanduGridServerResult
+  error: Error | undefined
+  loading: boolean
+  reload: () => void
+  rows: InanduGridRow[]
+  setQuery: (query: InanduGridServerQuery) => void
+  total: number
+interface InanduGridSort
+  direction: "asc" | "desc"
+  field: string
+type InanduGridStatePart = 'columnWidths' | 'reorderedFields' | 'hiddenFields' | 'pinnedOverrides' | 'sortCriteria' | 'filterQuery' | 'columnFilters'
+interface InanduHeaderRenderContext
+  field: string
+  title: string
+interface InanduPasteOptions
+  booleanLabels?: { truthy?: readonly string[]; falsy?: readonly string[]; } | undefined
+  locale?: string | undefined
+function interpolate(template: string, params?: Record<string, string | number> | undefined): string
+const it: <type of 1027 chars, sha1 be32e97744b9>
+function matchesColumnFilter(column: ColumnConfig, row: InanduGridRow, filterValue: InanduGridColumnFilterValue, locale: string, numberFormatter?: NumberFormatter | undefined): boolean
+function measureColumnContentWidth(host: HTMLElement, field: string, headerText: string): number
+type NumberFormatter = (value: number, locale: string, digitsInfo?: string) => string
+function parseLocaleNumber(raw: string, locale?: string | undefined): number | undefined
+function parsePastedBoolean(raw: string, options?: InanduPasteOptions | undefined): boolean | undefined
+function parsePastedCell(raw: string, type: InanduColumnType, options?: InanduPasteOptions | undefined): { value: unknown; } | undefined
+function parsePastedDate(raw: string, locale?: string | undefined): Date | undefined
+function printHtmlDocument(html: string, options?: { autoPrint?: boolean; } | undefined): void
+function printTable(rows: InanduGridRow[], columns: InanduGridColumn[], locale: string, title?: string | undefined): void
+function sanitizeGridState(value: unknown, parts?: readonly InanduGridStatePart[] | undefined): Partial<InanduGridSavedState>
+interface TreeVisibleRow
+  depth: number
+  expandable: boolean
+  expanded: boolean
+  row: T
+function useInanduGrid(arg0: UseInanduGridOptions): {
+  allColumns: InanduGridColumn[]
+  allSelected: boolean
+  cancelAddRow: () => void
+  cancelRowEdit: () => void
+  clearAllFilters: () => void
+  clearPersistedState: () => void
+  clearSelection: () => void
+  columnPinnedSide: (field: string) => InanduColumnStickySide | undefined
+  copyCellText: (rowIndex: number, field: string) => string
+  deleteRow: (row: InanduGridRow) => void
+  deleteSelectedRows: () => void
+  draggingField: string | undefined
+  draggingRow: InanduGridRow | undefined
+  editableColumns: InanduGridColumn[]
+  editingRow: InanduGridRow | undefined
+  effectiveWidth: (field: string) => number
+  exportRows: InanduGridRow[]
+  fieldErrors: Record<string, string>
+  filterQuery: string
+  filterValues: Record<string, InanduGridColumnFilterValue>
+  filteredRowCount: number
+  groupByField: string | undefined
+  groups: InanduGridGroup[] | null
+  hasTreeData: boolean
+  hasVirtualScroll: boolean
+  hideableColumns: InanduGridColumn[]
+  isAddingRow: boolean
+  isAnotherRowEditing: (row: InanduGridRow) => boolean
+  isColumnHidden: (field: string) => boolean
+  isColumnResized: (field: string) => boolean
+  isEditingRow: (row: InanduGridRow) => boolean
+  isRowExpanded: (row: InanduGridRow) => boolean
+  isRowSelected: (row: InanduGridRow) => boolean
+  isTreeRowExpanded: (row: InanduGridRow) => boolean
+  isValidating: boolean
+  locale: string
+  onColumnDragStart: (field: string) => void
+  onColumnDrop: (targetField: string) => void
+  onRowDragStart: (row: InanduGridRow) => void
+  onRowDrop: (targetRow: InanduGridRow) => void
+  page: number
+  pageCount: number
+  pasteAt: (anchorRowIndex: number, anchorField: string, text: string) => void
+  rowDraft: Record<string, unknown>
+  rowReactKey: (row: InanduGridRow) => string
+  saveNewRow: () => Promise<void>
+  saveRow: (row: InanduGridRow) => Promise<void>
+  selectedRows: Set<InanduGridRow>
+  setAllTreeRowsExpanded: (expanded: boolean) => void
+  setColumnOrder: (fields: readonly string[]) => void
+  setColumnPinned: (field: string, side: InanduColumnStickySide | undefined) => void
+  setColumnWidth: (field: string, width: number) => void
+  setFilterQuery: (query: string) => void
+  setFilterValue: (field: string, value: InanduGridColumnFilterValue) => void
+  setGroupByField: React.Dispatch<React.SetStateAction<string | undefined>>
+  setPage: React.Dispatch<React.SetStateAction<number>>
+  setRowDraftValue: (field: string, value: unknown) => void
+  setSort: React.Dispatch<React.SetStateAction<InanduGridSort[]>>
+  someSelected: boolean
+  sortCriteria: InanduGridSort[]
+  sortDirectionFor: (field: string) => "asc" | "desc" | undefined
+  sortPriorityFor: (field: string) => number | undefined
+  sortedRows: InanduGridRow[]
+  startAddingRow: () => void
+  startEditingRow: (row: InanduGridRow) => void
+  stickyOffset: (field: string) => number
+  stickyOffsetRight: (field: string) => number
+  toggleColumnVisibility: (field: string) => void
+  toggleRowExpanded: (row: InanduGridRow) => void
+  toggleRowSelection: (row: InanduGridRow) => void
+  toggleSelectAll: () => void
+  toggleSort: (field: string, additive?: boolean) => void
+  toggleTreeRow: (row: InanduGridRow) => void
+  totals: Record<string, number>
+  treeRows: TreeVisibleRow<InanduGridRow>[]
+  validateCell: (column: InanduGridColumn, value: unknown, row?: Record<string, unknown>) => string | null
+  visibleColumns: InanduGridColumn[]
+  visibleRows: InanduGridRow[]
+}
+interface UseInanduGridOptions
+  bulkDeleteConfirmMessage?: string | undefined
+  columns: InanduGridColumn[]
+  deleteConfirmMessage?: string | undefined
+  extraRowFilter?: ((row: InanduGridRow) => boolean) | undefined
+  lang?: string | undefined
+  locale?: string | undefined
+  onCellsPaste?: ((updates: InanduGridCellPaste[]) => void) | undefined
+  onQueryChange?: ((query: InanduGridServerQuery) => void) | undefined
+  onRowCreate?: ((values: Record<string, unknown>) => void) | undefined
+  onRowDelete?: ((row: InanduGridRow) => void) | undefined
+  onRowOrderChange?: ((rows: InanduGridRow[]) => void) | undefined
+  onRowSave?: ((event: InanduGridRowSave) => void) | undefined
+  onRowsDelete?: ((rows: InanduGridRow[]) => void) | undefined
+  pageSize?: number | undefined
+  persist?: readonly InanduGridStatePart[] | undefined
+  rowId?: InanduGridRowId | undefined
+  rows: InanduGridRow[]
+  selectable?: boolean | undefined
+  serverSide?: { totalItems: number; } | undefined
+  singleDetailExpand?: boolean | undefined
+  stateKey?: string | undefined
+  treeChildrenKey?: string | undefined
+  treeDefaultExpanded?: number | "none" | "all" | undefined
+  virtualScroll?: boolean | undefined
+function useInanduGridServer(options: InanduGridServerOptions): InanduGridServerResult
+const zh: <type of 1027 chars, sha1 be32e97744b9>
