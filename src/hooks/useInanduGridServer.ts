@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { hasMeaningfulFilterValue } from '@inandu-solutions/grid-core';
+import { hasMeaningfulFilterValue, parseServerResponse } from '@inandu-solutions/grid-core';
 import type { InanduGridRow } from '@inandu-solutions/grid-core';
 import type { InanduGridServerQuery } from './useInanduGrid';
 
@@ -89,26 +89,6 @@ export interface InanduGridServerOptions extends InanduGridQueryOptions {
    * Its result is checked like a plain `{ data, total }` body. Unset: the body is expected to be `{ data, total }` already.
    */
   mapResponse?: (body: unknown) => { data: InanduGridRow[]; total?: number };
-}
-
-/**
- * Checks a server reply and returns its rows and total. `data` must be an array, and `total`, when present, a finite number of
- * 0 or more; a missing `total` is taken to be the number of rows received. Anything else throws an error that says what was
- * wrong, so a wrong shape shows up as `error` instead of quietly as an empty grid.
- */
-export function parseServerResponse(body: unknown): { data: InanduGridRow[]; total: number } {
-  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
-    throw new Error(`Unexpected server response: expected an object like { data, total }, got ${Array.isArray(body) ? 'an array' : body === null ? 'null' : typeof body}.`);
-  }
-  const { data, total } = body as { data?: unknown; total?: unknown };
-  if (!Array.isArray(data)) {
-    throw new Error(`Unexpected server response: expected \`data\` to be an array, got ${data === undefined ? 'nothing' : typeof data}.`);
-  }
-  if (total === undefined || total === null) return { data: data as InanduGridRow[], total: data.length };
-  if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) {
-    throw new Error(`Unexpected server response: expected \`total\` to be a number of 0 or more, got ${JSON.stringify(total)}.`);
-  }
-  return { data: data as InanduGridRow[], total };
 }
 
 export interface InanduGridServerResult {
