@@ -89,7 +89,7 @@
     }
   },
   "dependencies": {
-    "@inandu-solutions/grid-core": "^0.1.5"
+    "@inandu-solutions/grid-core": "^0.1.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

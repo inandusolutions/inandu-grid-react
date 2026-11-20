@@ -20,35 +20,21 @@ import {
   parseDraftValue,
   parsePastedCell,
   ALL_GRID_STATE_PARTS,
-  GRID_STATE_VERSION,
+  clearSavedGridState,
+  createDeleteConfirmation,
   InanduGridSavedState,
   InanduGridStatePart,
+  readSavedGridState,
   sanitizeGridState,
   SELECT_COLUMN_WIDTH,
-  STATE_STORAGE_PREFIX,
   TreeVisibleRow,
+  writeSavedGridState,
 } from '@inandu-solutions/grid-core';
 import { createTranslator } from '../utils/translate';
 
 /** `useSyncExternalStore`'s subscribe for a value that never changes: only its server and client snapshots differ. */
 const subscribeToNothing = (): (() => void) => () => undefined;
 
-/** What is saved under `key`, limited to `parts`; `{}` when there is nothing, it cannot be read, or it is corrupt. */
-function readSavedState(key: string, parts: readonly InanduGridStatePart[]): Partial<InanduGridSavedState> {
-  if (typeof localStorage === 'undefined') return {};
-  try {
-    const stored = localStorage.getItem(STATE_STORAGE_PREFIX + key);
-    return stored ? sanitizeGridState(JSON.parse(stored), parts) : {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Plain-value column definition for the React API — friendlier than the core's `ColumnConfig`
- * getter shape (`field()`, `type()`, ...), which exists to match grid-angular's signal-based
- * columns. `toColumnConfig` below adapts one to the other so the ported core needs no changes.
- */
 export interface InanduGridColumn {
   field: string;
   headerText?: string;
@@ -322,7 +308,7 @@ export function useInanduGrid({
   const initialRef = useRef<{ state: Partial<InanduGridSavedState>; restored: boolean } | null>(null);
   if (initialRef.current === null) {
     if (initialState) initialRef.current = { state: sanitizeGridState(initialState, persist), restored: true };
-    else if (stateKey && canReadStorage) initialRef.current = { state: readSavedState(stateKey, persist), restored: true };
+    else if (stateKey && canReadStorage) initialRef.current = { state: readSavedGridState(stateKey, persist), restored: true };
     else initialRef.current = { state: {}, restored: false };
   }
   const initial = initialRef.current.state;
@@ -385,7 +371,7 @@ export function useInanduGrid({
   useEffect(() => {
     if (!stateKey || !canReadStorage || restoredStateKey.current === stateKey) return;
     restoredStateKey.current = stateKey;
-    const state = readSavedState(stateKey, persistRef.current);
+    const state = readSavedGridState(stateKey, persistRef.current);
     setRestoring(true);
     if (state.columnWidths) setColumnWidths(state.columnWidths);
     if (state.reorderedFields) setReorderedFields(state.reorderedFields);
@@ -398,9 +384,9 @@ export function useInanduGrid({
 
   useEffect(() => {
     if (!stateKey || restoredStateKey.current !== stateKey) return;
-    try {
-      const wanted = new Set(persistRef.current);
-      const state: Record<string, unknown> = {
+    writeSavedGridState(
+      stateKey,
+      {
         columnWidths,
         reorderedFields: reorderedFields ?? [],
         hiddenFields: Array.from(hiddenFields),
@@ -408,23 +394,14 @@ export function useInanduGrid({
         sortCriteria,
         filterQuery,
         columnFilters: filterValues,
-      };
-      const saved = Object.fromEntries(Object.entries(state).filter(([part]) => wanted.has(part as InanduGridStatePart)));
-      localStorage.setItem(STATE_STORAGE_PREFIX + stateKey, JSON.stringify({ v: GRID_STATE_VERSION, ...saved }));
-    } catch {
-      // Persistence is a convenience, not a guarantee.
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      },
+      persistRef.current,
+    );
   }, [stateKey, persistKey, columnWidths, reorderedFields, hiddenFields, pinnedOverrides, sortCriteria, filterQuery, filterValues]);
 
   /** Removes what `stateKey` saved from `localStorage`; the grid on screen keeps its state. A no-op without a `stateKey`. */
   function clearPersistedState(): void {
-    if (!stateKey) return;
-    try {
-      localStorage.removeItem(STATE_STORAGE_PREFIX + stateKey);
-    } catch {
-      // Nothing saved that could be cleared.
-    }
+    clearSavedGridState(stateKey);
   }
   // Keys of the tree nodes already offered the default expansion: a node is seeded once, when it first shows up.
   const treeSeenRef = useRef<Set<unknown>>(new Set());
@@ -1016,42 +993,11 @@ export function useInanduGrid({
     }
   }
 
-  /** `true` while a `confirmDelete` promise is waiting: a second click on a delete button then does nothing, instead of opening a second dialog. */
-  const confirmingDeleteRef = useRef(false);
+  /** The confirmation step of a delete (`createDeleteConfirmation` of grid-core, the same in every grid); it remembers a pending answer, so it is one per grid. */
+  const deleteConfirmationRef = useRef(createDeleteConfirmation());
 
-  /**
-   * Runs `proceed` once the delete is confirmed: by `confirmDelete` if set, else by `window.confirm(message)` if there is a
-   * message, else at once. Everything stays synchronous unless `confirmDelete` returns a promise.
-   */
   function confirmThen(message: string | undefined, rows: InanduGridRow[], proceed: () => void): void {
-    if (!confirmDelete) {
-      if (message && (typeof window === 'undefined' || !window.confirm(message))) return;
-      proceed();
-      return;
-    }
-    if (confirmingDeleteRef.current) return;
-    let answer: boolean | Promise<boolean>;
-    try {
-      answer = confirmDelete(rows);
-    } catch (error) {
-      console.error('inandu-grid: confirmDelete threw; the delete was not confirmed.', error);
-      return;
-    }
-    if (typeof answer === 'boolean') {
-      if (answer) proceed();
-      return;
-    }
-    confirmingDeleteRef.current = true;
-    answer.then(
-      confirmed => {
-        confirmingDeleteRef.current = false;
-        if (confirmed) proceed();
-      },
-      (error: unknown) => {
-        confirmingDeleteRef.current = false;
-        console.error('inandu-grid: confirmDelete rejected; the delete was not confirmed.', error);
-      },
-    );
+    deleteConfirmationRef.current.run({ confirmDelete, message }, rows, proceed);
   }
 
   function deleteRow(row: InanduGridRow): void {
