@@ -1,4 +1,4 @@
-import { INANDU_GRID_TRANSLATIONS, en } from '../core';
+import { INANDU_GRID_TRANSLATIONS, en } from '@inandu-solutions/grid-core';
 
 export type InanduGridMessageKey = keyof typeof en;
 

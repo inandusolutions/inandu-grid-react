@@ -1,6 +1,6 @@
 import { createRowKey, toReactKey } from './rowKey';
 import type { InanduGridRowId } from './rowKey';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {
   ColumnConfig,
   collectTreeRows,
@@ -21,13 +21,28 @@ import {
   parsePastedCell,
   ALL_GRID_STATE_PARTS,
   GRID_STATE_VERSION,
+  InanduGridSavedState,
   InanduGridStatePart,
   sanitizeGridState,
   SELECT_COLUMN_WIDTH,
   STATE_STORAGE_PREFIX,
   TreeVisibleRow,
-} from '../core';
+} from '@inandu-solutions/grid-core';
 import { createTranslator } from '../utils/translate';
+
+/** `useSyncExternalStore`'s subscribe for a value that never changes: only its server and client snapshots differ. */
+const subscribeToNothing = (): (() => void) => () => undefined;
+
+/** What is saved under `key`, limited to `parts`; `{}` when there is nothing, it cannot be read, or it is corrupt. */
+function readSavedState(key: string, parts: readonly InanduGridStatePart[]): Partial<InanduGridSavedState> {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem(STATE_STORAGE_PREFIX + key);
+    return stored ? sanitizeGridState(JSON.parse(stored), parts) : {};
+  } catch {
+    return {};
+  }
+}
 
 /**
  * Plain-value column definition for the React API — friendlier than the core's `ColumnConfig`
@@ -190,6 +205,13 @@ export interface UseInanduGridOptions {
   deleteConfirmMessage?: string;
   /** `window.confirm()`-gates `deleteSelectedRows()`. Unset: deletes immediately. */
   bulkDeleteConfirmMessage?: string;
+  /**
+   * Decides whether a delete goes ahead, so an app can show its own dialog instead of `window.confirm()`: it gets the row (or every
+   * selected row, for the bulk delete) and returns `true`, or a promise of `true`, to confirm. Set, it replaces both confirm
+   * messages. A rejection or a throw counts as not confirmed; a second click while a promise is pending is ignored. Without a
+   * browser (server rendering) a confirm message cannot be asked, so nothing is deleted.
+   */
+  confirmDelete?: (rows: InanduGridRow[]) => boolean | Promise<boolean>;
   /** Emitted by `saveRow()` once validation passes — the grid never mutates `rows` itself; applying the change is the caller's job. */
   onRowSave?: (event: InanduGridRowSave) => void;
   /** Emitted by `saveNewRow()` once validation passes. No row reference — it doesn't exist in `rows` yet. */
@@ -244,12 +266,19 @@ export interface UseInanduGridOptions {
   onQueryChange?: (query: InanduGridServerQuery) => void;
   /**
    * When set, saves this grid's column widths/order/visibility/pins, sort and filters to `localStorage` under this key and
-   * restores them the next time a grid with the same key mounts (after the first render, so server and client markup match).
-   * Unset (default): nothing is saved. Give two grids different keys.
+   * restores them the next time a grid with the same key mounts: while it renders the first time, so that draw already has them.
+   * A page being hydrated draws the defaults first (as the server did) and restores right after, so server and client markup
+   * match; see `initialState`. Unset (default): nothing is saved. Give two grids different keys.
    */
   stateKey?: string;
   /** Which parts of the state `stateKey` saves and restores; all by default. Leave out `'filterQuery'` and `'columnFilters'` to keep what was typed out of storage. */
   persist?: readonly InanduGridStatePart[];
+  /**
+   * The saved state to start from, instead of reading `localStorage` (same shape `stateKey` saves; parts that are missing or invalid
+   * are ignored). For server-rendered apps: pass what the server knows and the first draw, on the server and on the client, already
+   * has it, with no jump after hydration. Changes made after that are saved under `stateKey` as usual.
+   */
+  initialState?: Partial<InanduGridSavedState>;
 }
 
 /**
@@ -267,6 +296,7 @@ export function useInanduGrid({
   selectable = false,
   deleteConfirmMessage,
   bulkDeleteConfirmMessage,
+  confirmDelete,
   onRowSave,
   onRowCreate,
   onRowDelete,
@@ -283,10 +313,22 @@ export function useInanduGrid({
   onQueryChange,
   stateKey = '',
   persist = ALL_GRID_STATE_PARTS,
+  initialState,
 }: UseInanduGridOptions) {
-  const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>([]);
-  const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>({});
-  const [filterQuery, setFilterQueryState] = useState('');
+  // The saved state is read while the grid renders the first time, so that draw already has it (no jump after mount, and in
+  // server mode a single request, with the saved query). `false` while a page is being hydrated, and on the server: there the
+  // first client render must match the server's, so the restore waits for it (see the effect below).
+  const canReadStorage = useSyncExternalStore(subscribeToNothing, () => true, () => false);
+  const initialRef = useRef<{ state: Partial<InanduGridSavedState>; restored: boolean } | null>(null);
+  if (initialRef.current === null) {
+    if (initialState) initialRef.current = { state: sanitizeGridState(initialState, persist), restored: true };
+    else if (stateKey && canReadStorage) initialRef.current = { state: readSavedState(stateKey, persist), restored: true };
+    else initialRef.current = { state: {}, restored: false };
+  }
+  const initial = initialRef.current.state;
+  const [sortCriteria, setSortCriteria] = useState<InanduGridSort[]>(initial.sortCriteria ?? []);
+  const [filterValues, setFilterValues] = useState<Record<string, InanduGridColumnFilterValue>>(initial.columnFilters ?? {});
+  const [filterQuery, setFilterQueryState] = useState(initial.filterQuery ?? '');
   const [page, setPage] = useState(0);
   const [groupByState, setGroupByField] = useState<string | undefined>(undefined);
   const isServerSide = !!serverSide;
@@ -318,45 +360,46 @@ export function useInanduGrid({
   const [rowDraft, setRowDraft] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
-  const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
-  const [reorderedFields, setReorderedFields] = useState<string[] | undefined>(undefined);
+  const [hiddenFields, setHiddenFields] = useState<Set<string>>(() => new Set(initial.hiddenFields));
+  const [reorderedFields, setReorderedFields] = useState<string[] | undefined>(initial.reorderedFields);
   const [draggingField, setDraggingField] = useState<string | undefined>(undefined);
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const [pinnedOverrides, setPinnedOverrides] = useState<Record<string, InanduColumnStickySide | 'none'>>({});
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(initial.columnWidths ?? {});
+  const [pinnedOverrides, setPinnedOverrides] = useState<Record<string, InanduColumnStickySide | 'none'>>(initial.pinnedOverrides ?? {});
   const [draggingRow, setDraggingRow] = useState<InanduGridRow | undefined>(undefined);
   const [expandedTreeRows, setExpandedTreeRows] = useState<Set<unknown>>(new Set());
   const [expandedRows, setExpandedRows] = useState<Set<unknown>>(new Set());
 
   // -- stateKey persistence -------------------------------------------------
-  // Restore once, after mount. What is in storage may be stale, hand-edited or from another version, so only the parts
-  // with the right shape and sizes get through (`sanitizeGridState`), never the raw parsed object.
-  const restoredStateKey = useRef<string | null>(null);
+  // What is in storage may be stale, hand-edited or from another version, so only the parts with the right shape and sizes get
+  // through (`sanitizeGridState`), never the raw parsed object. The first read happens above, while rendering. What is left for an
+  // effect is a page that was being hydrated (storage can be read from then on) and a `stateKey` that changes.
+  const restoredStateKey = useRef<string | null>(initialRef.current.restored ? stateKey : null);
   const persistKey = persist.join(',');
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+  /** `true` for the render that shows a restore after mount: what the sort, filter and page notifications see then is not the user acting. */
+  const [restoring, setRestoring] = useState(false);
   useEffect(() => {
-    if (!stateKey || restoredStateKey.current === stateKey) return;
-    try {
-      const stored = localStorage.getItem(STATE_STORAGE_PREFIX + stateKey);
-      if (stored) {
-        const state = sanitizeGridState(JSON.parse(stored), persist);
-        if (state.columnWidths) setColumnWidths(state.columnWidths);
-        if (state.reorderedFields) setReorderedFields(state.reorderedFields);
-        if (state.hiddenFields) setHiddenFields(new Set(state.hiddenFields));
-        if (state.pinnedOverrides) setPinnedOverrides(state.pinnedOverrides);
-        if (state.sortCriteria) setSortCriteria(state.sortCriteria);
-        if (state.filterQuery !== undefined) setFilterQueryState(state.filterQuery);
-        if (state.columnFilters) setFilterValues(state.columnFilters);
-      }
-    } catch {
-      // Corrupt state or no storage access: start fresh.
-    }
+    if (restoring) setRestoring(false);
+  }, [restoring]);
+  useEffect(() => {
+    if (!stateKey || !canReadStorage || restoredStateKey.current === stateKey) return;
     restoredStateKey.current = stateKey;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateKey]);
+    const state = readSavedState(stateKey, persistRef.current);
+    setRestoring(true);
+    if (state.columnWidths) setColumnWidths(state.columnWidths);
+    if (state.reorderedFields) setReorderedFields(state.reorderedFields);
+    if (state.hiddenFields) setHiddenFields(new Set(state.hiddenFields));
+    if (state.pinnedOverrides) setPinnedOverrides(state.pinnedOverrides);
+    if (state.sortCriteria) setSortCriteria(state.sortCriteria);
+    if (state.filterQuery !== undefined) setFilterQueryState(state.filterQuery);
+    if (state.columnFilters) setFilterValues(state.columnFilters);
+  }, [stateKey, canReadStorage]);
 
   useEffect(() => {
     if (!stateKey || restoredStateKey.current !== stateKey) return;
     try {
-      const wanted = new Set(persist);
+      const wanted = new Set(persistRef.current);
       const state: Record<string, unknown> = {
         columnWidths,
         reorderedFields: reorderedFields ?? [],
@@ -973,16 +1016,54 @@ export function useInanduGrid({
     }
   }
 
+  /** `true` while a `confirmDelete` promise is waiting: a second click on a delete button then does nothing, instead of opening a second dialog. */
+  const confirmingDeleteRef = useRef(false);
+
+  /**
+   * Runs `proceed` once the delete is confirmed: by `confirmDelete` if set, else by `window.confirm(message)` if there is a
+   * message, else at once. Everything stays synchronous unless `confirmDelete` returns a promise.
+   */
+  function confirmThen(message: string | undefined, rows: InanduGridRow[], proceed: () => void): void {
+    if (!confirmDelete) {
+      if (message && (typeof window === 'undefined' || !window.confirm(message))) return;
+      proceed();
+      return;
+    }
+    if (confirmingDeleteRef.current) return;
+    let answer: boolean | Promise<boolean>;
+    try {
+      answer = confirmDelete(rows);
+    } catch (error) {
+      console.error('inandu-grid: confirmDelete threw; the delete was not confirmed.', error);
+      return;
+    }
+    if (typeof answer === 'boolean') {
+      if (answer) proceed();
+      return;
+    }
+    confirmingDeleteRef.current = true;
+    answer.then(
+      confirmed => {
+        confirmingDeleteRef.current = false;
+        if (confirmed) proceed();
+      },
+      (error: unknown) => {
+        confirmingDeleteRef.current = false;
+        console.error('inandu-grid: confirmDelete rejected; the delete was not confirmed.', error);
+      },
+    );
+  }
+
   function deleteRow(row: InanduGridRow): void {
-    if (deleteConfirmMessage && !window.confirm(deleteConfirmMessage)) return;
-    onRowDelete?.(row);
+    confirmThen(deleteConfirmMessage, [row], () => onRowDelete?.(row));
   }
 
   function deleteSelectedRows(): void {
-    if (bulkDeleteConfirmMessage && !window.confirm(bulkDeleteConfirmMessage)) return;
     const rows = Array.from(selectedRows);
-    clearSelection();
-    onRowsDelete?.(rows);
+    confirmThen(bulkDeleteConfirmMessage, rows, () => {
+      clearSelection();
+      onRowsDelete?.(rows);
+    });
   }
 
   function startAddingRow(): void {
@@ -1193,6 +1274,8 @@ export function useInanduGrid({
     sortCriteria,
     setSort: setSortCriteria,
     clearPersistedState,
+    /** `true` for the render that shows a restore after mount: what the sort, filter and page notifications see then is not the user acting. */
+    restoring,
     toggleSort,
     sortDirectionFor,
     sortPriorityFor,

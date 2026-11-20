@@ -1,4 +1,4 @@
-import type { InanduGridRow } from '../core';
+import type { InanduGridRow } from '@inandu-solutions/grid-core';
 
 /**
  * How the grid identifies a row across renders and data refreshes: the name of a field (`'sku'`) or a

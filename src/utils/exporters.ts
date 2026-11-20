@@ -1,4 +1,4 @@
-import { InanduGridRow, downloadBlob, escapeCsvValue, escapeMarkup, formatCellValue, buildPrintHtml, printHtmlDocument, truncatePdfText } from '../core';
+import { InanduGridRow, downloadBlob, escapeCsvValue, escapeMarkup, formatCellValue, buildPrintHtml, printHtmlDocument, truncatePdfText } from '@inandu-solutions/grid-core';
 import { InanduGridColumn } from '../hooks/useInanduGrid';
 
 function headerLabel(column: InanduGridColumn): string {

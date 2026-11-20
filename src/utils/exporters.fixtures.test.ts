@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { InanduGridRow } from '../core';
+import type { InanduGridRow } from '@inandu-solutions/grid-core';
 import type { InanduGridColumn } from '../hooks/useInanduGrid';
 
 const downloads: { content: unknown; filename: string; type?: string }[] = [];
-vi.mock('../core', async importOriginal => ({
-  ...(await importOriginal<typeof import('../core')>()),
+vi.mock('@inandu-solutions/grid-core', async importOriginal => ({
+  ...(await importOriginal<typeof import('@inandu-solutions/grid-core')>()),
   downloadBlob: (content: unknown, filename: string, type?: string) => downloads.push({ content, filename, type }),
 }));
 

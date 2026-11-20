@@ -87,6 +87,7 @@ interface InanduGridProps
   clipboard?: boolean | undefined
   columnToggle?: boolean | undefined
   columns: InanduGridColumn[]
+  confirmDelete?: ((rows: InanduGridRow[]) => boolean | Promise<boolean>) | undefined
   creatable?: boolean | undefined
   customTranslations?: Record<string, Record<string, string>> | undefined
   deletable?: boolean | undefined
@@ -100,6 +101,7 @@ interface InanduGridProps
   filterPlaceholder?: string | undefined
   height?: number | undefined
   id?: string | undefined
+  initialState?: Partial<InanduGridSavedState> | undefined
   lang?: string | undefined
   loading?: boolean | undefined
   locale?: string | undefined
@@ -157,6 +159,7 @@ interface InanduGridServerOptions
   extraParams?: Record<string, string> | undefined
   fetcher?: ((url: string, init: RequestInit) => Promise<Response>) | undefined
   init?: RequestInit | undefined
+  mapResponse?: ((body: unknown) => { data: InanduGridRow[]; total?: number; }) | undefined
   url: string
 interface InanduGridServerQuery
   filterQuery: string
@@ -242,6 +245,7 @@ function useInanduGrid(arg0: UseInanduGridOptions): {
   page: number
   pageCount: number
   pasteAt: (anchorRowIndex: number, anchorField: string, text: string) => void
+  restoring: boolean
   rowDraft: Record<string, unknown>
   rowReactKey: (row: InanduGridRow) => string
   saveNewRow: () => Promise<void>
@@ -281,8 +285,10 @@ function useInanduGrid(arg0: UseInanduGridOptions): {
 interface UseInanduGridOptions
   bulkDeleteConfirmMessage?: string | undefined
   columns: InanduGridColumn[]
+  confirmDelete?: ((rows: InanduGridRow[]) => boolean | Promise<boolean>) | undefined
   deleteConfirmMessage?: string | undefined
   extraRowFilter?: ((row: InanduGridRow) => boolean) | undefined
+  initialState?: Partial<InanduGridSavedState> | undefined
   lang?: string | undefined
   locale?: string | undefined
   onCellsPaste?: ((updates: InanduGridCellPaste[]) => void) | undefined
