@@ -9,8 +9,8 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import type { InanduGridColumnFilterValue, InanduGridRow, InanduGridStatePart, TreeVisibleRow } from '../core';
-import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '../core';
+import type { InanduGridColumnFilterValue, InanduGridRow, InanduGridSavedState, InanduGridStatePart, TreeVisibleRow } from '@inandu-solutions/grid-core';
+import { AGGREGATE_SYMBOLS, formatCellValue, MAX_COLUMN_WIDTH } from '@inandu-solutions/grid-core';
 import { InanduGridCellPaste, InanduGridColumn, InanduGridRowSave, useInanduGrid } from '../hooks/useInanduGrid';
 import type { InanduGridServerQuery, InanduGridSort } from '../hooks/useInanduGrid';
 import type { InanduGridRowId } from '../hooks/rowKey';
@@ -74,6 +74,8 @@ export interface InanduGridProps {
   deleteConfirmMessage?: string;
   /** `window.confirm()`-gates the "Delete selected" bulk action (shown when `selectable && deletable` with at least one row selected). Unset: deletes immediately. */
   bulkDeleteConfirmMessage?: string;
+  /** Decides whether a delete goes ahead (sync or async), instead of `window.confirm()`: gets the row, or every selected row for the bulk delete. Set, it replaces both confirm messages. See `useInanduGrid`. */
+  confirmDelete?: (rows: InanduGridRow[]) => boolean | Promise<boolean>;
   /** Adds an "Add row" trigger with a blank draft row. Default: false. Has no effect unless at least one column is `editable`. */
   creatable?: boolean;
   /** Called once a row edit passes validation. The grid never mutates `rows` itself — applying `values` onto `row` is the caller's job. */
@@ -196,6 +198,8 @@ export interface InanduGridProps {
   stateKey?: string;
   /** Which parts of the state `stateKey` saves; all by default. Leave out `'filterQuery'` and `'columnFilters'` to keep typed text out of storage. */
   persist?: readonly InanduGridStatePart[];
+  /** The saved state to start from instead of reading `localStorage`: for server-rendered apps, so the first draw has it on both sides. See `useInanduGrid`. */
+  initialState?: Partial<InanduGridSavedState>;
   /** Rows shown above the data rows, outside of filtering, sorting, paging and totals (a summary row you computed yourself). Read-only. */
   pinnedTopRows?: InanduGridRow[];
   /** Rows shown below the data rows, with the same rules as `pinnedTopRows`. */
@@ -227,6 +231,7 @@ export function InanduGrid({
   deletable = false,
   deleteConfirmMessage,
   bulkDeleteConfirmMessage,
+  confirmDelete,
   creatable = false,
   onRowSave,
   onRowCreate,
@@ -266,6 +271,7 @@ export function InanduGrid({
   customTranslations,
   stateKey,
   persist,
+  initialState,
   pinnedTopRows = [],
   pinnedBottomRows = [],
   onSortChange,
@@ -339,6 +345,7 @@ export function InanduGrid({
     toggleRowExpanded,
     hasVirtualScroll,
     sortCriteria,
+    restoring,
   } = useInanduGrid({
     rows,
     columns,
@@ -348,6 +355,7 @@ export function InanduGrid({
     selectable,
     deleteConfirmMessage,
     bulkDeleteConfirmMessage,
+    confirmDelete,
     onRowSave,
     onRowCreate,
     onRowDelete,
@@ -364,13 +372,25 @@ export function InanduGrid({
     onQueryChange,
     stateKey,
     persist,
+    initialState,
   });
 
   const t = useMemo(() => createTranslator(lang ?? locale, customTranslations), [lang, locale, customTranslations]);
   const [dragOverField, setDragOverField] = useState<string | undefined>(undefined);
   const [dragOverRow, setDragOverRow] = useState<InanduGridRow | undefined>(undefined);
   const [resizing, setResizing] = useState<{ field: string; startX: number; startWidth: number } | null>(null);
-  const [scrollTop, setScrollTop] = useState(0);
+  // The window is worked out from the scroll position, but the grid renders again only when the rows shown (first and last) change,
+  // not on every pixel of a scroll event: the position is kept in a ref and the state holds just those two numbers, so a scroll
+  // event that leaves them as they were sets the same state and React bails out (a trackpad fires many events per row).
+  const scrollTopRef = useRef(0);
+  const [, setShownRows] = useState({ first: 0, last: 0 });
+  function showScrollTop(top: number): void {
+    scrollTopRef.current = top;
+    const first = Math.floor(top / virtualRowHeight);
+    const last = Math.ceil((top + height) / virtualRowHeight);
+    setShownRows(current => (current.first === first && current.last === last ? current : { first, last }));
+  }
+  const scrollTop = scrollTopRef.current;
   const tableRef = useRef<HTMLTableElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   /**
@@ -386,9 +406,16 @@ export function InanduGrid({
    */
   const parkedFocusRef = useRef<{ key: string; col: number } | null>(null);
 
+  // Reported when the selection changes (the user ticking a row, "select all", a delete clearing it), never for the empty selection the
+  // grid starts with, and not again when the parent passes a new callback on every render (an inline arrow, the usual case).
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  const reportedSelection = useRef(selectedRows);
   useEffect(() => {
-    onSelectionChange?.(Array.from(selectedRows));
-  }, [selectedRows, onSelectionChange]);
+    if (reportedSelection.current === selectedRows) return;
+    reportedSelection.current = selectedRows;
+    onSelectionChangeRef.current?.(Array.from(selectedRows));
+  }, [selectedRows]);
 
   // After every render of a virtual grid (no dependency list on purpose: what it waits for is the DOM of this render, and the refs it reads
   // are not state; it returns at once when nothing is pending or parked). A keyboard move that had to scroll first, or a focused cell that
@@ -437,20 +464,21 @@ export function InanduGrid({
   const lastSort = useRef(sortCriteria);
   const lastFilter = useRef({ query: filterQuery, filters: filterValues });
   const lastPage = useRef(page);
+  // (also not for the saved state being put back after a hydration: `restoring`. A server-side grid still hears it through `onQueryChange`.)
   useEffect(() => {
-    if (mounted.current && lastSort.current !== sortCriteria) onSortChange?.(sortCriteria);
+    if (mounted.current && !restoring && lastSort.current !== sortCriteria) onSortChange?.(sortCriteria);
     lastSort.current = sortCriteria;
-  }, [sortCriteria, onSortChange]);
+  }, [sortCriteria, onSortChange, restoring]);
   useEffect(() => {
-    if (mounted.current && (lastFilter.current.query !== filterQuery || lastFilter.current.filters !== filterValues)) {
+    if (mounted.current && !restoring && (lastFilter.current.query !== filterQuery || lastFilter.current.filters !== filterValues)) {
       onFilterChange?.({ query: filterQuery, columnFilters: filterValues });
     }
     lastFilter.current = { query: filterQuery, filters: filterValues };
-  }, [filterQuery, filterValues, onFilterChange]);
+  }, [filterQuery, filterValues, onFilterChange, restoring]);
   useEffect(() => {
-    if (mounted.current && lastPage.current !== page) onPageChange?.({ page, pageSize });
+    if (mounted.current && !restoring && lastPage.current !== page) onPageChange?.({ page, pageSize });
     lastPage.current = page;
-  }, [page, pageSize, onPageChange]);
+  }, [page, pageSize, onPageChange, restoring]);
   useEffect(() => {
     mounted.current = true;
   }, []);
@@ -515,11 +543,24 @@ export function InanduGrid({
 
   // Reports the active range and the full range list on every change, including the transition to
   // "nothing selected" — a React-idiomatic stand-in for grid-angular's per-gesture `emit` calls.
-  useEffect(() => {
-    if (!hasCellRangeSelection) return;
+  // Nothing is reported for the empty state the grid starts with. The callbacks are read through a ref that is refreshed on every
+  // render, so a new inline arrow from the parent does not report again; what triggers a report is a change of the selection itself
+  // or of the rows and columns it spans.
+  const reportRangesRef = useRef<() => void>(() => undefined);
+  reportRangesRef.current = () => {
     onCellRangeChange?.(selectedRange ? rangeToSelection(selectedRange) : undefined);
     onCellRangesChange?.(allRanges.map(rangeToSelection));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  };
+  // What the last run of the effect saw. A run that sees the same things again (StrictMode runs effects twice on mount) reports nothing,
+  // and neither does the first run when nothing is selected.
+  const lastRangeTrigger = useRef<unknown[] | null>(null);
+  useEffect(() => {
+    if (!hasCellRangeSelection) return;
+    const trigger = [rangeAnchor, rangeFocus, committedRanges, visibleRows, visibleColumns];
+    const before = lastRangeTrigger.current;
+    lastRangeTrigger.current = trigger;
+    if (before === null ? allRanges.length === 0 : before.every((value, i) => value === trigger[i])) return;
+    reportRangesRef.current();
   }, [hasCellRangeSelection, rangeAnchor, rangeFocus, committedRanges, visibleRows, visibleColumns]);
 
   /** Starts a new range selection gesture — a plain click resets to this cell; shift-click extends the *existing* anchor; Ctrl/Cmd-click (with `multiRange`) freezes the current rectangle and starts another. */
@@ -692,14 +733,14 @@ export function InanduGrid({
     if (!viewport) return true;
     pendingFocusRef.current = { row: target, col, at: Date.now(), rows: visibleRows };
     viewport.scrollTop = Math.max(0, target * virtualRowHeight - height / 2);
-    setScrollTop(viewport.scrollTop);
+    showScrollTop(viewport.scrollTop);
     return true;
   }
 
   /** Scroll handler of the virtual viewport: moves the window, and parks focus on the viewport if the focused row is about to unmount. */
   function handleViewportScroll(event: React.UIEvent<HTMLDivElement>): void {
     const top = event.currentTarget.scrollTop;
-    setScrollTop(top);
+    showScrollTop(top);
     const active = document.activeElement;
     if (!(active instanceof HTMLElement) || !tableRef.current?.contains(active) || active.getAttribute('role') !== 'gridcell') return;
     const rowEl = active.closest('tr[data-row-index]');

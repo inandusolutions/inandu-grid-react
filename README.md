@@ -152,6 +152,32 @@ const { visibleRows, filteredRowCount, sortCriteria, setSort, filterValues, setF
   useInanduGrid({ rows, columns, pageSize: 25 });
 ```
 
+### Notifications
+
+`onSelectionChange`, `onSortChange`, `onFilterChange`, `onPageChange` and the cell-range callbacks report what the user does. None
+of them fires when the grid mounts (not even for the empty selection it starts with), nor when the state saved under `stateKey` is
+put back, and a new inline arrow function on every render does not make them fire again. A server-side grid still gets that
+restored query once, through `onQueryChange`.
+
+### Your own delete confirmation
+
+`deleteConfirmMessage` and `bulkDeleteConfirmMessage` ask with the browser's `window.confirm()`. To show your own dialog, pass
+`confirmDelete`: a function that gets the row (or every selected row, for the bulk delete) and answers `true`, or a promise of
+`true`, to go ahead. It replaces both messages. A rejection or a throw counts as not confirmed, and a second click while the
+dialog is open is ignored.
+
+```tsx
+<InanduGrid rows={rows} columns={columns} deletable confirmDelete={rows => myDialog.ask(`Delete ${rows.length}?`)} />
+```
+
+### Saved state and server rendering
+
+With `stateKey`, the grid saves column widths, order, visibility, pins, sort and filters to `localStorage` and puts them back the
+next time: while it renders for the first time, so that draw already has them. A page that is being hydrated draws the defaults
+first (as the server did) and restores right after. To avoid that jump on a server-rendered page, pass `initialState` with what the
+server knows (same shape the grid saves: `{ sortCriteria, filterQuery, columnFilters, columnWidths, hiddenFields, ... }`); it is used
+on the server and the client alike.
+
 ## Server-side data
 
 For tables too big to load whole, let the backend sort, filter and page, and keep the grid's UI
@@ -173,7 +199,10 @@ const server = useInanduGridServer({ url: '/api/products' });
 
 `useInanduGridServer` turns the grid's page / sort / search / column filters into a query string
 (`?page=2&pageSize=25&sort=-price&q=cable&price_gte=20`), aborts superseded requests, debounces typing,
-and keeps the previous page on screen while the next loads. It expects `{ data: [...], total: n }`.
+and keeps the previous page on screen while the next loads. It expects `{ data: [...], total: n }`; a reply of another shape
+sets `error` (and keeps the rows on screen) instead of showing an empty grid, and a missing `total` is taken to be the number of rows
+received. If your API answers differently, adapt it with `mapResponse`, e.g.
+`useInanduGridServer({ url, mapResponse: b => ({ data: b.items, total: b.count }) })`.
 That is exactly what [`Inandu.Grid.Extensions`](https://github.com/inandusolutions/inandu-grid-extensions)
 (.NET / EF Core) returns from one `ToInanduGrid()` call — [request contract](https://github.com/inandusolutions/inandu-grid-extensions/blob/main/docs/request-contract.md) —
 but any backend that speaks the same params works. Runnable example: [`examples/server-side`](examples/server-side).

@@ -1,7 +1,8 @@
 import { fireEvent, render } from '@testing-library/react';
+import { Profiler } from 'react';
 import { describe, expect, it } from 'vitest';
 import { InanduGrid } from './InanduGrid';
-import type { InanduGridRow } from '../core';
+import type { InanduGridRow } from '@inandu-solutions/grid-core';
 
 /** Virtual scroll with many rows (review point C2): data that arrives late, a viewport that is resized, scroll set from code. */
 const columns = [
@@ -77,5 +78,34 @@ describe('virtual scroll: many rows', () => {
   it('keeps the viewport focusable by code, so focus has somewhere to wait when its row scrolls away', () => {
     const { container } = render(grid(make(100)));
     expect(viewport(container).getAttribute('tabindex')).toBe('-1');
+  });
+});
+
+describe('virtual scroll: what a scroll event costs', () => {
+  it('re-renders only when the rows shown change, not on every pixel of a scroll event', () => {
+    let commits = 0;
+    const { container } = render(
+      <Profiler id="grid" onRender={() => { commits += 1; }}>
+        {grid(make(5000))}
+      </Profiler>,
+    );
+    const before = commits;
+
+    // 100 scroll events that stay inside the first rows (20px rows: tops 1..100 cross 5 row boundaries; the first and the last row
+    // shown change at a boundary, and a change can take two commits). Before, every one of the 100 events rendered the grid again (101 commits).
+    for (let top = 1; top <= 100; top++) scrollTo(container, top);
+    const renders = commits - before;
+
+    expect(renders).toBeLessThanOrEqual(20);
+    expect(ids(container)[0]).toBe(4); // scrolled 100px = 5 rows, minus the 2 overscan rows above
+  });
+
+  it('the window still follows the scroll: the rows near the top of the viewport are mounted', () => {
+    const { container } = render(grid(make(5000)));
+    scrollTo(container, 20 * 1000);
+    const mounted = ids(container);
+    expect(mounted).toContain(1001);
+    expect(mounted).toContain(1010);
+    expect(mounted).not.toContain(1);
   });
 });

@@ -1,4 +1,4 @@
-import { escapeAttributeSelectorValue } from '../core';
+import { escapeAttributeSelectorValue } from '@inandu-solutions/grid-core';
 
 /**
  * Widest rendered value in a column (its header and every currently-rendered data cell), measured

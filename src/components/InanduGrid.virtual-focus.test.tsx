@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InanduGrid } from './InanduGrid';
-import type { InanduGridRow } from '../core';
+import type { InanduGridRow } from '@inandu-solutions/grid-core';
 
 /**
  * Where focus goes on a virtual grid when the window moves under it (review of the C PR): a keyboard jump that cannot finish must not take

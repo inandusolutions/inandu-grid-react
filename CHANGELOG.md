@@ -9,6 +9,24 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+### Added
+
+- `confirmDelete` (prop of `<InanduGrid>`, option of `useInanduGrid`): `(rows) => boolean | Promise<boolean>` decides whether a row delete or the bulk delete goes ahead, so an app can show its own dialog instead of `window.confirm()`. It replaces `deleteConfirmMessage` / `bulkDeleteConfirmMessage` when set; without it nothing changes. A rejection or a throw counts as not confirmed, and a second click while a promise is pending is ignored.
+- `initialState` (same two places): the saved state to start from instead of reading `localStorage`, for server-rendered apps. The first draw has it on the server and on the client, with no jump after hydration.
+- `mapResponse` option of `useInanduGridServer`, for a backend whose reply is not `{ data, total }`.
+
+### Changed
+
+- **Notifications:** `onSelectionChange` no longer fires with an empty selection when the grid mounts, nor again on every render when the parent passes a new inline function (it fired on each of those renders, and a parent that stored the selection in its own state re-rendered more than needed, or looped). `onCellRangeChange` / `onCellRangesChange` no longer report the empty selection at mount (grid-angular never did), and `onSortChange`, `onFilterChange` and `onPageChange` do not fire when the state saved under `stateKey` is put back after a hydration. They report what the user does. A server-side grid still gets the restored query once, through `onQueryChange`.
+- `useInanduGridServer` checks the reply: `data` must be an array and `total`, when present, a number of 0 or more. A wrong shape now sets `error` and keeps the rows on screen, where it used to show an empty grid with a total of 0. A reply without `total` takes the number of rows received as the total (it was 0).
+- The `src/core` folder that only re-exported `@inandu-solutions/grid-core` is gone; the source imports the package directly, and `npm run build` copies the stylesheet with `scripts/copy-css.mjs` instead of an inline `node -e`. No change for users of the package.
+
+### Fixed
+
+- With a `stateKey`, the first draw used the defaults and then jumped to the saved sort, filters and widths, and the save that ran in the same pass wrote the defaults over the saved value for a moment; in `serverSide` mode the app also asked the server for the default query before the saved one. The saved state is now read while the grid renders for the first time, so the first draw has it and there is a single request. A page being hydrated still restores right after, so the server and client markup match.
+- Virtual scroll: the whole grid rendered again on every scroll event, 101 times for 100 one-pixel events. It now renders again only when the rows shown change (a handful of times for the same 100 events).
+- Rendering on the server: a delete that only has a confirm message is not carried out (`window.confirm()` cannot ask there), instead of failing.
+
 ## [0.5.2] - 2026-11-19
 
 ### Fixed

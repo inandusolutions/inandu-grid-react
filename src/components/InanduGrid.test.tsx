@@ -728,10 +728,23 @@ describe('InanduGrid: cell range selection', () => {
     expect(onCellRangeChange).toHaveBeenLastCalledWith({ rows: [rows[0], rows[1]], fields: ['name'] });
   });
 
-  it('reports undefined once the selection has nothing (initial render)', () => {
+  it('reports nothing for the empty selection the grid starts with, like grid-angular', () => {
     const onCellRangeChange = vi.fn();
-    render(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={onCellRangeChange} />);
-    expect(onCellRangeChange).toHaveBeenCalledWith(undefined);
+    const onCellRangesChange = vi.fn();
+    render(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={onCellRangeChange} onCellRangesChange={onCellRangesChange} />);
+    expect(onCellRangeChange).not.toHaveBeenCalled();
+    expect(onCellRangesChange).not.toHaveBeenCalled();
+  });
+
+  it('does not report again when the parent passes a new callback on every render', () => {
+    const onCellRangeChange = vi.fn();
+    const { rerender } = render(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={selection => onCellRangeChange(selection)} />);
+    fireEvent.mouseDown(screen.getByText('Beatriz'), { button: 0 });
+    const calls = onCellRangeChange.mock.calls.length;
+    expect(calls).toBeGreaterThan(0);
+    rerender(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={selection => onCellRangeChange(selection)} />);
+    rerender(<InanduGrid rows={rows} columns={columns} cellRangeSelection onCellRangeChange={selection => onCellRangeChange(selection)} />);
+    expect(onCellRangeChange).toHaveBeenCalledTimes(calls);
   });
 
   it('shift-click extends the existing anchor without a drag', () => {
