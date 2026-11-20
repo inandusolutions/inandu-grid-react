@@ -551,12 +551,15 @@ export function InanduGrid({
     onCellRangeChange?.(selectedRange ? rangeToSelection(selectedRange) : undefined);
     onCellRangesChange?.(allRanges.map(rangeToSelection));
   };
-  const rangesReportedOnce = useRef(false);
+  // What the last run of the effect saw. A run that sees the same things again (StrictMode runs effects twice on mount) reports nothing,
+  // and neither does the first run when nothing is selected.
+  const lastRangeTrigger = useRef<unknown[] | null>(null);
   useEffect(() => {
     if (!hasCellRangeSelection) return;
-    const first = !rangesReportedOnce.current;
-    rangesReportedOnce.current = true;
-    if (first && allRanges.length === 0) return;
+    const trigger = [rangeAnchor, rangeFocus, committedRanges, visibleRows, visibleColumns];
+    const before = lastRangeTrigger.current;
+    lastRangeTrigger.current = trigger;
+    if (before === null ? allRanges.length === 0 : before.every((value, i) => value === trigger[i])) return;
     reportRangesRef.current();
   }, [hasCellRangeSelection, rangeAnchor, rangeFocus, committedRanges, visibleRows, visibleColumns]);
 

@@ -40,12 +40,15 @@ describe('InanduGrid: restoring the saved state', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ sortCriteria: saved.sortCriteria, filterQuery: 'a' });
   });
 
-  it('server mode: one query, the saved one, instead of the default one followed by the saved one', () => {
+  it('server mode: the query is the saved one from the start, never the default one followed by the saved one', () => {
     const onQueryChange = vi.fn();
     render(<InanduGrid rows={rows} columns={columns} stateKey="restore-test" pageSize={10} serverSide={{ totalItems: 2 }} onQueryChange={onQueryChange} />);
 
-    expect(onQueryChange).toHaveBeenCalledTimes(1);
-    expect(onQueryChange).toHaveBeenCalledWith(expect.objectContaining({ sortCriteria: saved.sortCriteria, filterQuery: 'a' }));
+    // (StrictMode runs the mount effect twice, so the number of calls is 1 or 2; what matters is that every one is the saved query.)
+    expect(onQueryChange).toHaveBeenCalled();
+    for (const [query] of onQueryChange.mock.calls) {
+      expect(query).toEqual(expect.objectContaining({ sortCriteria: saved.sortCriteria, filterQuery: 'a' }));
+    }
   });
 
   it('does not report the restore as sort, filter, page or selection changes', () => {
