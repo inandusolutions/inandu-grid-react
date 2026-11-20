@@ -9,6 +9,8 @@ entries below start from the next release.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-20
+
 ### Added
 
 - `confirmDelete` (prop of `<InanduGrid>`, option of `useInanduGrid`): `(rows) => boolean | Promise<boolean>` decides whether a row delete or the bulk delete goes ahead, so an app can show its own dialog instead of `window.confirm()`. It replaces `deleteConfirmMessage` / `bulkDeleteConfirmMessage` when set; without it nothing changes. A rejection or a throw counts as not confirmed, and a second click while a promise is pending is ignored.
@@ -182,7 +184,9 @@ grid does not implement.
 
 - `InanduEditRenderContext`: document that `renderEditor` receives the raw control shape, so arrays and objects arrive as text, and how to handle them.
 
-[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.2...v0.5.3
+[0.5.2]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/inandusolutions/inandu-grid-react/compare/v0.2.3...v0.3.0
